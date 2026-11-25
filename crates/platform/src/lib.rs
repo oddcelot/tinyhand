@@ -10,6 +10,7 @@ pub mod cursor;
 pub mod hotkeys;
 pub mod input;
 pub mod login;
+pub mod menus;
 pub mod sound;
 pub mod tray;
 
@@ -160,6 +161,119 @@ mod imp {
         }
     }
 
+    fn ns_window_of(window: &impl HasWindowHandle) -> Result<*mut Object, String> {
+        let handle = window.window_handle().map_err(|e| e.to_string())?;
+        let RawWindowHandle::AppKit(h) = handle.as_raw() else {
+            return Err("not an AppKit window".into());
+        };
+        // SAFETY: the view belongs to a live GPUI window.
+        unsafe {
+            let view = h.ns_view.as_ptr() as *mut Object;
+            let ns_window: *mut Object = msg_send![view, window];
+            if ns_window.is_null() {
+                return Err("view has no window".into());
+            }
+            Ok(ns_window)
+        }
+    }
+
+    /// The toolbar and hint panel: floats one level below the overlay (as the Swift
+    /// toolbar does), on every Space, without AppKit's shadow (the view draws its own).
+    pub fn make_panel(window: &impl HasWindowHandle) -> Result<(), String> {
+        let ns_window = ns_window_of(window)?;
+        // SAFETY: plain setters on a live window, on the main thread.
+        unsafe {
+            let _: () = msg_send![ns_window, setLevel: 1001i64];
+            // canJoinAllSpaces | stationary | ignoresCycle | fullScreenAuxiliary
+            let _: () = msg_send![ns_window, setCollectionBehavior: (1u64 | 16 | 64 | 256)];
+            let _: () = msg_send![ns_window, setHasShadow: NO];
+            let _: () = msg_send![ns_window, setHidesOnDeactivate: NO];
+        }
+        Ok(())
+    }
+
+    /// Moves and sizes a window to a rect in global points (y down from the top of the
+    /// primary display).
+    pub fn place_window(window: &impl HasWindowHandle, x: f64, y: f64, w: f64, h: f64) -> Result<(), String> {
+        let ns_window = ns_window_of(window)?;
+        // SAFETY: AppKit calls on the main thread; `screens` always has the primary first.
+        unsafe {
+            let screens: *mut Object = msg_send![class!(NSScreen), screens];
+            let count: usize = msg_send![screens, count];
+            if count == 0 {
+                return Err("no screens".into());
+            }
+            let primary: *mut Object = msg_send![screens, objectAtIndex: 0usize];
+            let pf: NSRect = msg_send![primary, frame];
+            let frame = NSRect { origin: NSPoint { x, y: pf.size.y - (y + h) }, size: NSPoint { x: w, y: h } };
+            allow_any_frame(ns_window);
+            let _: () = msg_send![ns_window, setFrame: frame display: YES];
+        }
+        Ok(())
+    }
+
+    /// Lets clicks fall through a window (or not).
+    pub fn set_ignores_mouse(window: &impl HasWindowHandle, ignore: bool) -> Result<(), String> {
+        let ns_window = ns_window_of(window)?;
+        // SAFETY: plain setter on a live window.
+        unsafe {
+            let _: () = msg_send![ns_window, setIgnoresMouseEvents: if ignore { YES } else { NO }];
+        }
+        Ok(())
+    }
+
+    /// A card-like window (the welcome card): no traffic lights, the blur behind it
+    /// rounded to the card.
+    pub fn make_card(window: &impl HasWindowHandle, radius: f64) -> Result<(), String> {
+        let ns_window = ns_window_of(window)?;
+        // SAFETY: AppKit calls on a live window, on the main thread.
+        unsafe {
+            for kind in 0u64..3 {
+                let button: *mut Object = msg_send![ns_window, standardWindowButton: kind];
+                if !button.is_null() {
+                    let _: () = msg_send![button, setHidden: YES];
+                }
+            }
+            let _: () = msg_send![ns_window, setMovableByWindowBackground: YES];
+        }
+        round_blur(window, radius)?;
+        // SAFETY: as above.
+        unsafe {
+            let _: () = msg_send![ns_window, setHasShadow: YES];
+            let _: () = msg_send![ns_window, invalidateShadow];
+        }
+        Ok(())
+    }
+
+    /// Rounds the corners of the blur GPUI puts behind a `Blurred` window, so a card-shaped
+    /// window doesn't show a square of blur at its corners.
+    pub fn round_blur(window: &impl HasWindowHandle, radius: f64) -> Result<(), String> {
+        let ns_window = ns_window_of(window)?;
+        // SAFETY: walks the content view's subviews and sets layer properties.
+        unsafe {
+            let content: *mut Object = msg_send![ns_window, contentView];
+            if content.is_null() {
+                return Ok(());
+            }
+            let subviews: *mut Object = msg_send![content, subviews];
+            let count: usize = msg_send![subviews, count];
+            for i in 0..count {
+                let view: *mut Object = msg_send![subviews, objectAtIndex: i];
+                let is_blur: bool = msg_send![view, isKindOfClass: class!(NSVisualEffectView)];
+                if !is_blur {
+                    continue;
+                }
+                let _: () = msg_send![view, setWantsLayer: YES];
+                let layer: *mut Object = msg_send![view, layer];
+                if !layer.is_null() {
+                    let _: () = msg_send![layer, setCornerRadius: radius];
+                    let _: () = msg_send![layer, setMasksToBounds: YES];
+                }
+            }
+        }
+        Ok(())
+    }
+
     /// `display_height` is the height of the main display in points; AppKit counts y up
     /// from its bottom edge.
     pub fn mouse(display_height: f32, _scale: f32) -> Mouse {
@@ -215,6 +329,47 @@ mod imp {
         Ok(())
     }
 
+    fn hwnd_of(window: &impl HasWindowHandle) -> Result<HWND, String> {
+        let handle = window.window_handle().map_err(|e| e.to_string())?;
+        let RawWindowHandle::Win32(h) = handle.as_raw() else {
+            return Err("not a Win32 window".into());
+        };
+        Ok(h.hwnd.get() as HWND)
+    }
+
+    /// The toolbar and hint panel: topmost, never activated, out of the taskbar.
+    pub fn make_panel(window: &impl HasWindowHandle) -> Result<(), String> {
+        make_overlay(window, false)
+    }
+
+    /// GPUI already placed the window from its bounds.
+    pub fn place_window(_window: &impl HasWindowHandle, _x: f64, _y: f64, _w: f64, _h: f64) -> Result<(), String> {
+        Ok(())
+    }
+
+    /// Lets clicks fall through a window (or not). The window must be layered
+    /// (`make_panel` or `make_overlay` made it so).
+    pub fn set_ignores_mouse(window: &impl HasWindowHandle, ignore: bool) -> Result<(), String> {
+        let hwnd = hwnd_of(window)?;
+        unsafe {
+            let style = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
+            let bit = WS_EX_TRANSPARENT as isize;
+            let new = if ignore { style | bit } else { style & !bit };
+            if new != style {
+                SetWindowLongPtrW(hwnd, GWL_EXSTYLE, new);
+            }
+        }
+        Ok(())
+    }
+
+    pub fn make_card(_window: &impl HasWindowHandle, _radius: f64) -> Result<(), String> {
+        Ok(())
+    }
+
+    pub fn round_blur(_window: &impl HasWindowHandle, _radius: f64) -> Result<(), String> {
+        Ok(())
+    }
+
     /// Windows reports the cursor in physical pixels.
     pub fn mouse(_display_height: f32, scale: f32) -> Mouse {
         let mut p = POINT { x: 0, y: 0 };
@@ -263,6 +418,30 @@ mod imp {
         };
         let _ = click_through;
         keep_above(id).map_err(|e| format!("X11: {e}"))
+    }
+
+    /// The toolbar and hint panel: kept above (X11). On Wayland GPUI makes it a
+    /// layer-shell surface, which needs nothing more.
+    pub fn make_panel(window: &impl HasWindowHandle) -> Result<(), String> {
+        make_overlay(window, false)
+    }
+
+    /// GPUI already placed the window from its bounds (X11) or its layer-shell anchor.
+    pub fn place_window(_window: &impl HasWindowHandle, _x: f64, _y: f64, _w: f64, _h: f64) -> Result<(), String> {
+        Ok(())
+    }
+
+    /// Not possible here; the app forwards clicks on the panel's empty parts instead.
+    pub fn set_ignores_mouse(_window: &impl HasWindowHandle, _ignore: bool) -> Result<(), String> {
+        Ok(())
+    }
+
+    pub fn make_card(_window: &impl HasWindowHandle, _radius: f64) -> Result<(), String> {
+        Ok(())
+    }
+
+    pub fn round_blur(_window: &impl HasWindowHandle, _radius: f64) -> Result<(), String> {
+        Ok(())
     }
 
     fn keep_above(window: u32) -> Result<(), Box<dyn std::error::Error>> {
@@ -338,6 +517,26 @@ mod imp {
 
     pub fn make_overlay(_window: &impl HasWindowHandle, _click_through: bool) -> Result<(), String> {
         Err("overlay isn't written for this platform".into())
+    }
+
+    pub fn make_panel(_window: &impl HasWindowHandle) -> Result<(), String> {
+        Err("panels aren't written for this platform".into())
+    }
+
+    pub fn place_window(_window: &impl HasWindowHandle, _x: f64, _y: f64, _w: f64, _h: f64) -> Result<(), String> {
+        Ok(())
+    }
+
+    pub fn set_ignores_mouse(_window: &impl HasWindowHandle, _ignore: bool) -> Result<(), String> {
+        Ok(())
+    }
+
+    pub fn make_card(_window: &impl HasWindowHandle, _radius: f64) -> Result<(), String> {
+        Ok(())
+    }
+
+    pub fn round_blur(_window: &impl HasWindowHandle, _radius: f64) -> Result<(), String> {
+        Ok(())
     }
 
     pub fn mouse(_display_height: f32, _scale: f32) -> Mouse {

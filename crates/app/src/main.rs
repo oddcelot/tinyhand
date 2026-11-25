@@ -6,6 +6,7 @@
 //! - `controller.rs`: on/off, tray, shortcuts, input tap, commands (AppDelegate and
 //!   OverlayController in the Swift app).
 //! - `overlay.rs`: the overlay window and what moves on it; `paint.rs` draws it.
+//! - `toolbar.rs`: the toolbar, ink tray and hints; `welcome.rs`: the welcome card.
 //! - `tray_menu.rs`, `shift.rs` (double-⇧), `instance.rs`, `assets.rs`.
 //!
 //! The app starts with the pointer off, as a tray icon. Commands: `tinyhand on|off|toggle|
@@ -15,7 +16,10 @@
 //! TH_TAP_EVERY=seconds taps on a timer, TH_SECONDS=n quits after n seconds, TH_ACTIVATE=1
 //! turns the pointer on at launch, TH_DEBUG=1 logs every frame, TH_CONFIG_DIR puts the
 //! settings elsewhere, TH_HANDS_DIR the custom hands, TH_INPUT=capture uses the Linux way
-//! of reading the mouse anywhere, TH_BACKEND=x11 forces X11 on Linux.
+//! of reading the mouse anywhere, TH_BACKEND=x11 forces X11 on Linux, and
+//! TH_SHOW=toolbar|toolbar-untrusted|ink|tooltip|hint|welcome|welcome-untrusted|settings:<page> opens that
+//! window at launch for screenshots. The welcome card doesn't open by itself during runs
+//! with any of these hooks.
 
 mod assets;
 mod controller;
@@ -24,7 +28,9 @@ mod overlay;
 mod paint;
 mod settings_window;
 mod shift;
+mod toolbar;
 mod tray_menu;
+mod welcome;
 
 use std::time::Duration;
 
@@ -152,7 +158,7 @@ fn main() {
     #[cfg(not(target_os = "linux"))]
     let app = gpui_platform::application();
     // A tray app: closing the overlay must not quit.
-    let app = app.with_quit_mode(QuitMode::Explicit);
+    let app = app.with_quit_mode(QuitMode::Explicit).with_assets(assets::Icons);
 
     let (tx, mut rx) = mpsc::unbounded::<Msg>();
     {
@@ -204,8 +210,22 @@ fn main() {
             if let Some(command) = pending.take() {
                 c.command(command, cx);
             }
-            if c.hooks.activate {
+            let show = c.hooks.show.clone().unwrap_or_default();
+            if c.hooks.activate || matches!(show.as_str(), "toolbar" | "toolbar-untrusted" | "ink" | "hint" | "tooltip") {
                 c.activate(cx);
+            }
+            // AppDelegate: the welcome card on the first launch, and on a Mac until
+            // TinyHand may use Accessibility.
+            let untrusted = cfg!(target_os = "macos") && !tinyhand_platform::input::is_trusted();
+            if show.starts_with("welcome") {
+                c.welcome.simulate_untrusted = show == "welcome-untrusted";
+                c.show_welcome(cx);
+            } else if let Some(page) = show.strip_prefix("settings:") {
+                let page = page.to_string();
+                let me = cx.entity();
+                cx.defer(move |cx| settings_window::open_for_test(me, &page, cx));
+            } else if !c.hooks.unattended() && show.is_empty() && (!c.settings.welcome_shown || untrusted) {
+                c.show_welcome(cx);
             }
             if let Some(seconds) = c.hooks.quit_after {
                 cx.spawn(async move |_, cx| {

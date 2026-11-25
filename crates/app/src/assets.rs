@@ -82,3 +82,60 @@ pub fn tray_icons() -> Result<TrayIcons, String> {
     let (w, h) = on.dimensions();
     TrayIcons::from_rgba(w, h, light(on), light(off))
 }
+
+/// The app icon for the welcome card: the 512 px PNG the Linux package installs, looked
+/// for next to an installed binary, in a macOS bundle and in the repo.
+pub fn app_icon() -> Option<PathBuf> {
+    let mut candidates: Vec<PathBuf> = Vec::new();
+    if let Some(bin) = exe_dir() {
+        candidates.push(bin.join("../share/icons/hicolor/512x512/apps/tinyhand.png"));
+        candidates.push(bin.join("../Resources/tinyhand.png"));
+        candidates.push(bin.join("tinyhand.png"));
+    }
+    candidates.push("/usr/share/icons/hicolor/512x512/apps/tinyhand.png".into());
+    candidates.push(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../packaging/linux/tinyhand.png"));
+    candidates.into_iter().find(|p| p.is_file())
+}
+
+/// An RGBA image as GPUI wants it for drawing (BGRA pixels).
+pub fn render_image(mut rgba: image::RgbaImage) -> std::sync::Arc<gpui::RenderImage> {
+    for p in rgba.pixels_mut() {
+        p.0.swap(0, 2);
+    }
+    std::sync::Arc::new(gpui::RenderImage::new(vec![image::Frame::new(rgba)]))
+}
+
+/// Small icons drawn with `svg().path("icons/…")`, tinted with the text colour. Shapes
+/// after the SF Symbols the Swift app uses.
+pub struct Icons;
+
+impl Icons {
+    const FILES: &'static [(&'static str, &'static str)] = &[
+        (
+            "icons/speaker.svg",
+            r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M2.5 9.2c0-.7.5-1.2 1.2-1.2h2.9l4.3-3.7c.6-.5 1.6-.1 1.6.8v13.8c0 .9-1 1.3-1.6.8L6.6 16H3.7c-.7 0-1.2-.5-1.2-1.2z" fill="#000"/><path d="M15.6 8.6a4.8 4.8 0 0 1 0 6.8M18.6 5.8a8.8 8.8 0 0 1 0 12.4" stroke="#000" stroke-width="2" stroke-linecap="round" fill="none"/></svg>"##,
+        ),
+        (
+            "icons/speaker-off.svg",
+            r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4.5 9.2c0-.7.5-1.2 1.2-1.2h2.9l4.3-3.7c.6-.5 1.6-.1 1.6.8v13.8c0 .9-1 1.3-1.6.8L8.6 16H5.7c-.7 0-1.2-.5-1.2-1.2z" fill="#000"/><path d="M3.5 3.5l17 17" stroke="#000" stroke-width="4.2" stroke-linecap="round"/></svg>"##,
+        ),
+        (
+            "icons/xmark.svg",
+            r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke="#000" stroke-width="2.2" stroke-linecap="round" fill="none"/></svg>"##,
+        ),
+        (
+            "icons/warning.svg",
+            r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="#000" fill-rule="evenodd" d="M10.3 3.2c.8-1.3 2.6-1.3 3.4 0l8.4 14.5c.8 1.3-.2 3-1.7 3H3.6c-1.5 0-2.5-1.7-1.7-3zM11 8.5h2l-.2 6.2h-1.6zM12 16.3a1.2 1.2 0 1 0 0 2.4a1.2 1.2 0 1 0 0-2.4z"/></svg>"##,
+        ),
+    ];
+}
+
+impl gpui::AssetSource for Icons {
+    fn load(&self, path: &str) -> gpui::Result<Option<std::borrow::Cow<'static, [u8]>>> {
+        Ok(Self::FILES.iter().find(|(p, _)| *p == path).map(|(_, svg)| std::borrow::Cow::Borrowed(svg.as_bytes())))
+    }
+
+    fn list(&self, path: &str) -> gpui::Result<Vec<gpui::SharedString>> {
+        Ok(Self::FILES.iter().filter(|(p, _)| p.starts_with(path)).map(|(p, _)| (*p).into()).collect())
+    }
+}

@@ -66,3 +66,14 @@ fn hand_pixels_follow_size() {
     arm.press_now();
     assert!(arm.is_settling());
 }
+
+#[test]
+fn thumbnails_show_the_hand() {
+    for path in bundled().into_iter().take(5) {
+        let t = tinyhand_core::hand::thumbnail(&path, 128).unwrap_or_else(|e| panic!("{e}"));
+        assert_eq!(t.dimensions(), (128, 128));
+        let solid = t.pixels().filter(|p| p[3] > 128).count();
+        // The hand fills a good part of the square but not all of it.
+        assert!((128 * 128 / 10..128 * 128 * 9 / 10).contains(&solid), "{}: {solid}", path.display());
+    }
+}

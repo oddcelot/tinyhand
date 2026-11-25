@@ -316,7 +316,9 @@ impl Controller {
                 if mods != self.mods {
                     self.modifiers_changed(mods, cx);
                 }
-                (f32::from(p.x), f32::from(p.y))
+                // Over the toolbar window the overlay doesn't see the mouse; the toolbar
+                // tells where it is.
+                self.toolbar.pointer.unwrap_or((f32::from(p.x), f32::from(p.y)))
             }
             Input::Watch => {
                 let fake = self.hooks.fake_mouse.is_some();
@@ -370,6 +372,7 @@ impl Controller {
             );
         }
 
+        self.update_toolbar(mouse, cx);
         if self.input == Input::Watch && self.hooks.fake_mouse.is_none() {
             self.update_zones(global);
             self.check_lock(cx);
@@ -405,12 +408,12 @@ impl Controller {
     }
 
     /// Capture mode: GPUI's own mouse events.
-    fn captured_down(&mut self, at: (f32, f32)) {
+    pub(crate) fn captured_down(&mut self, at: (f32, f32)) {
         self.scene.captured_down = true;
         self.press(at);
     }
 
-    fn captured_up(&mut self) {
+    pub(crate) fn captured_up(&mut self) {
         self.scene.captured_down = false;
         self.scene.release();
     }
@@ -462,7 +465,10 @@ impl Render for OverlayView {
                 this.controller.update(cx, |c, _| c.captured_up());
                 window.refresh();
             }))
-            .on_mouse_move(cx.listener(|_, _, window, _| window.refresh()))
+            .on_mouse_move(cx.listener(|this, _, window, cx| {
+                this.controller.update(cx, |c, _| c.toolbar.pointer = None);
+                window.refresh();
+            }))
             // The overlay takes every click, so there has to be a way out without the tray.
             .on_mouse_down(MouseButton::Right, cx.listener(|this, _, _, cx| {
                 this.controller.update(cx, |c, cx| c.exit(cx));

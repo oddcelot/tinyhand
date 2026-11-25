@@ -36,6 +36,11 @@ impl Hand {
         let image = image::open(path)
             .map_err(|e| format!("can't read {}: {e}", path.display()))?
             .into_rgba8();
+        Hand::measure(&image)
+    }
+
+    /// Measures a hand image (`HandAsset.measure`).
+    pub fn measure(image: &RgbaImage) -> Result<Self, String> {
         let (w, h) = (image.width() as usize, image.height() as usize);
         let solid = |x: usize, y: usize| image.get_pixel(x as u32, y as u32)[3] > 128;
         let counts: Vec<usize> = (0..h).map(|y| (0..w).filter(|&x| solid(x, y)).count()).collect();
@@ -65,7 +70,7 @@ impl Hand {
 
         let fh = h as f32;
         let hand_top_px = (top as f32 - 0.004 * fh).max(0.0);
-        let crop = imageops::crop_imm(&image, 0, hand_top_px as u32, w as u32, (wrist as f32 - hand_top_px) as u32).to_image();
+        let crop = imageops::crop_imm(image, 0, hand_top_px as u32, w as u32, (wrist as f32 - hand_top_px) as u32).to_image();
 
         Ok(Hand {
             crop,
@@ -155,4 +160,45 @@ fn rotate(src: &RgbaImage, angle: f32) -> (RgbaImage, f32, f32) {
         }
     }
     (out, ow / sw, oh / sh)
+}
+
+/// The picture of a hand for buttons (`HandAsset.thumbnail`): a square around the hand
+/// only (fingertip to wrist), 1.06 times its larger side, centred on it and scaled to
+/// `side` × `side` pixels. RGBA, straight alpha.
+pub fn thumbnail(path: &std::path::Path, side: u32) -> Result<RgbaImage, String> {
+    let image = image::open(path)
+        .map_err(|e| format!("can't read {}: {e}", path.display()))?
+        .into_rgba8();
+    thumbnail_of(&image, side)
+}
+
+/// [`thumbnail`] of an image already in memory.
+pub fn thumbnail_of(image: &RgbaImage, side: u32) -> Result<RgbaImage, String> {
+    let hand = Hand::measure(image)?;
+    let (w, h) = (image.width() as f32, image.height() as f32);
+    let (top, wrist) = ((hand.tip * h) as u32, (hand.wrist * h) as u32);
+    let (mut min_x, mut max_x) = (image.width(), 0);
+    for y in top..wrist.min(image.height()) {
+        for x in 0..image.width() {
+            if image.get_pixel(x, y)[3] > 128 {
+                min_x = min_x.min(x);
+                max_x = max_x.max(x);
+            }
+        }
+    }
+    if min_x > max_x {
+        return Err("no hand found".into());
+    }
+    let hand_w = (max_x - min_x) as f32;
+    let hand_h = (hand.wrist - hand.hand_top) * h;
+    let square = hand_w.max(hand_h) * 1.06;
+    let (cx, cy) = ((min_x + max_x) as f32 / 2.0, (hand.hand_top + hand.wrist) / 2.0 * h);
+    // Clipped to the image, as CGImage.cropping(to:) does; the clipped square is then
+    // stretched to fill, as the Swift thumbnail draws it.
+    let x0 = (cx - square / 2.0).max(0.0);
+    let y0 = (cy - square / 2.0).max(0.0);
+    let x1 = (cx + square / 2.0).min(w);
+    let y1 = (cy + square / 2.0).min(h);
+    let crop = imageops::crop_imm(image, x0 as u32, y0 as u32, ((x1 - x0) as u32).max(1), ((y1 - y0) as u32).max(1)).to_image();
+    Ok(imageops::resize(&crop, side, side, imageops::FilterType::Triangle))
 }

@@ -26,6 +26,8 @@ use tinyhand_platform::tray::{Tray, TrayEvent};
 
 use crate::overlay::{OverlayView, Scene};
 use crate::shift::{Mods, ShiftTaps};
+use crate::toolbar::Toolbar;
+use crate::welcome::Welcome;
 use crate::{assets, tray_menu};
 
 pub enum Msg {
@@ -58,6 +60,9 @@ pub struct TestHooks {
     pub debug: bool,
     /// TH_ACTIVATE=1 turns the pointer on at launch.
     pub activate: bool,
+    /// TH_SHOW=toolbar|toolbar-untrusted|ink|tooltip|hint|welcome|welcome-untrusted opens that
+    /// window at launch, for screenshots (the toolbar ones turn the pointer on).
+    pub show: Option<String>,
 }
 
 impl TestHooks {
@@ -72,7 +77,14 @@ impl TestHooks {
             quit_after: env("TH_SECONDS").and_then(|v| v.parse().ok()),
             debug: std::env::var_os("TH_DEBUG").is_some(),
             activate: env("TH_ACTIVATE").is_some_and(|v| v == "1" || v == "true"),
+            show: env("TH_SHOW").filter(|v| !v.is_empty()),
         }
+    }
+
+    /// Any hook for unattended runs is set (the welcome card then stays away unless
+    /// TH_SHOW asks for it).
+    pub fn unattended(&self) -> bool {
+        self.fake_mouse.is_some() || self.tap_every.is_some() || self.quit_after.is_some() || self.activate
     }
 }
 
@@ -85,7 +97,7 @@ pub struct Controller {
     pub custom: CustomHands,
     pub hooks: TestHooks,
     pub input: Input,
-    window_kind: Box<dyn Fn() -> WindowKind>,
+    pub(crate) window_kind: Box<dyn Fn() -> WindowKind>,
     tx: UnboundedSender<Msg>,
     tray: Option<Tray>,
     hotkeys: Option<Hotkeys>,
@@ -108,6 +120,15 @@ pub struct Controller {
     esc_registered: bool,
     last_lock_check: Instant,
     pub scene: Scene,
+    pub toolbar: Toolbar,
+    pub welcome: Welcome,
+    /// Open menus of any app (macOS), rescanned often while a menu is likely.
+    menu_rects: Vec<input::Rect>,
+    last_menu_scan: Instant,
+    /// A press on the menu bar: a menu is opening, though not on screen yet.
+    menu_opening_until: Instant,
+    last_button_event: Instant,
+    menu_hover: bool,
 }
 
 impl Controller {
@@ -148,6 +169,13 @@ impl Controller {
             esc_registered: false,
             last_lock_check: Instant::now(),
             scene,
+            toolbar: Toolbar::default(),
+            welcome: Welcome::default(),
+            menu_rects: Vec::new(),
+            last_menu_scan: Instant::now(),
+            menu_opening_until: Instant::now(),
+            last_button_event: Instant::now(),
+            menu_hover: false,
         }
     }
 
@@ -230,7 +258,9 @@ impl Controller {
         self.save_settings();
         self.update_tray();
         self.write_state();
+        self.toolbar.dirty = true;
         self.wake(cx);
+        self.refresh_welcome(cx);
         cx.notify();
     }
 
@@ -274,6 +304,7 @@ impl Controller {
     /// After custom hands were added, renamed or deleted.
     pub fn reload_custom_hands(&mut self, cx: &mut Context<Self>) {
         self.custom = CustomHands::load_default();
+        self.forget_thumbnails();
         self.update_settings(cx, |_| {});
     }
 
@@ -286,7 +317,7 @@ impl Controller {
         if self.scene.style.kind == StyleKind::Laser { self.settings.laser_sound } else { self.settings.hand_sound }
     }
 
-    fn set_sound_on(&mut self, on: bool) {
+    pub(crate) fn set_sound_on(&mut self, on: bool) {
         if self.scene.style.kind == StyleKind::Laser {
             self.settings.laser_sound = on;
         } else {
@@ -295,9 +326,10 @@ impl Controller {
         self.save_settings();
         self.update_tray();
         self.write_state();
+        self.toolbar.dirty = true;
     }
 
-    fn save_settings(&self) {
+    pub(crate) fn save_settings(&self) {
         if let Err(e) = self.settings.save() {
             log(&format!("can't save settings: {e}"));
         }
@@ -364,14 +396,15 @@ impl Controller {
         match id {
             tray_menu::ALLOW => {
                 self.exit(cx);
-                input::request_trust();
+                self.show_welcome(cx);
             }
             tray_menu::TOGGLE => self.toggle(cx),
             tray_menu::CLEAR => self.clear_ink(cx),
             tray_menu::SOUND => self.set_sound_on(!self.sound_on()),
             tray_menu::SETTINGS => {
                 self.exit(cx);
-                log("settings not yet ported");
+                let this = cx.entity();
+                cx.defer(move |cx| crate::settings_window::open(this, cx));
             }
             tray_menu::QUIT => cx.quit(),
             _ => {}
@@ -412,6 +445,7 @@ impl Controller {
         self.save_settings();
         self.update_tray();
         self.write_state();
+        self.toolbar.dirty = true;
         self.wake(cx);
         true
     }
@@ -437,7 +471,7 @@ impl Controller {
 
     /// Whether this run reads the mouse natively and may tap it. Never with TH_FAKE_MOUSE,
     /// so an unattended run can't swallow the user's clicks.
-    fn taps_input(&self) -> bool {
+    pub(crate) fn taps_input(&self) -> bool {
         self.input == Input::Watch && self.hooks.fake_mouse.is_none()
     }
 
@@ -447,8 +481,8 @@ impl Controller {
         }
         if self.taps_input() && cfg!(target_os = "macos") && !input::is_trusted() {
             log("activate skipped: not trusted for Accessibility");
-            input::request_trust();
             self.update_tray();
+            self.show_welcome(cx);
             return;
         }
         self.active = true;
@@ -478,6 +512,7 @@ impl Controller {
         self.click_through = false;
         self.shift.reset();
         self.set_esc(true);
+        self.toolbar_activated();
         self.update_tray();
         self.write_state();
     }
@@ -500,6 +535,9 @@ impl Controller {
         self.scene.ink.clear();
         self.scene.particles.clear();
         self.close_window(cx);
+        self.toolbar_deactivated(cx);
+        self.menu_rects.clear();
+        self.menu_hover = false;
         self.normal_cursor = false;
         self.own_menu_open = false;
         self.set_esc(false);
@@ -571,6 +609,7 @@ impl Controller {
         if on {
             self.scene.release();
         }
+        self.click_through_hint(on);
         self.set_esc(true);
         self.update_tray();
         self.wake(cx);
@@ -593,6 +632,9 @@ impl Controller {
         if !self.active {
             return;
         }
+        if !matches!(event, InputEvent::Modifiers { .. } | InputEvent::LeftDragged { .. }) {
+            self.last_button_event = Instant::now();
+        }
         match event {
             InputEvent::MouseDown { x, y, .. } => {
                 let p = self.to_local(x, y);
@@ -614,7 +656,12 @@ impl Controller {
                 self.guard_cursor_until = Instant::now() + Duration::from_secs(2);
                 self.cursor.reassert(false, true);
             }
-            InputEvent::PassThroughPress { .. } => {}
+            InputEvent::PassThroughPress { x, y } => {
+                let bar = self.display.and_then(|d| native::menus::menu_bar_rect(&d));
+                if bar.is_some_and(|b| b.contains(x, y)) {
+                    self.menu_opening_until = Instant::now() + Duration::from_secs(1);
+                }
+            }
             InputEvent::ScreenLocked => self.deactivate("click on locked screen", cx),
             InputEvent::Modifiers { shift, control, alt, command } => {
                 self.modifiers_changed(Mods { shift, control, alt, command }, cx);
@@ -640,6 +687,7 @@ impl Controller {
     /// A swallowed press (`inputTap.onMouseDown`): press the hand, sound, dust, and
     /// remember where a drag would start.
     pub fn press(&mut self, at: (f32, f32)) {
+        self.toolbar.hide_hint();
         self.scene.press(at, self.settings.tap_effect, self.settings.pointer_size);
         self.play_tap_sound();
     }
@@ -654,6 +702,7 @@ impl Controller {
     /// Redraw the overlay soon (after events from other threads).
     pub fn wake(&mut self, cx: &mut Context<Self>) {
         self.scene.wake();
+        self.toolbar.dirty = true;
         if let Some(handle) = self.window {
             cx.defer(move |cx| {
                 let _ = handle.update(cx, |_, window, _| window.refresh());
@@ -673,14 +722,38 @@ impl Controller {
         }
     }
 
-    /// Shows or hides the real cursor and sets the tap's pass-through rects, as
-    /// `OverlayController.updateZones` (without the toolbar and menu scanning yet).
+    /// Shows or hides the real cursor and sets the tap's pass-through rects
+    /// (`OverlayController.updateZones`; the toolbar half is `update_toolbar`).
     pub fn update_zones(&mut self, global_mouse: Option<(f64, f64)>) {
+        let now = Instant::now();
         let drawing = self.scene.ink.is_drawing();
         let interacting = self.interact_held() || self.interact_pressing;
+
+        // Menus: the menu bar, and any app's open menu. Scanning the window list costs a
+        // little, so it is done often only while a menu is likely.
+        let menu_bar = self.display.and_then(|d| native::menus::menu_bar_rect(&d));
+        let mouse_in = |r: &input::Rect| global_mouse.is_some_and(|(x, y)| r.contains(x, y));
+        let near_bar = menu_bar.is_some_and(|b| mouse_in(&input::Rect::new(b.x, b.y - 40.0, b.w, b.h + 80.0)));
+        let likely = !self.menu_rects.is_empty()
+            || self.own_menu_open
+            || now < self.menu_opening_until
+            || now.duration_since(self.last_button_event) < Duration::from_secs(2)
+            || near_bar;
+        let every = Duration::from_millis(if likely { 50 } else { 250 });
+        if cfg!(target_os = "macos") && now.duration_since(self.last_menu_scan) > every {
+            self.last_menu_scan = now;
+            self.menu_rects = native::menus::open_menu_rects();
+        }
+        let over_menu = menu_bar.is_some_and(|b| mouse_in(&b))
+            || self.menu_rects.iter().any(mouse_in)
+            || now < self.menu_opening_until;
+        self.menu_hover = over_menu;
+
         let normal = !drawing
             && !self.settings.interact_keeps_hand
-            && ((interacting && !self.click_through) || self.own_menu_open);
+            && ((interacting && !self.click_through) || over_menu || self.own_menu_open);
+        let no_menus = self.menu_rects.is_empty();
+        self.set_esc(no_menus);
         if normal != self.normal_cursor {
             self.normal_cursor = normal;
             if normal {
@@ -691,17 +764,20 @@ impl Controller {
         }
         if !normal {
             let over_dock = global_mouse.is_some_and(|(x, y)| native::cursor::dock_contains(x, y));
-            let urgent = interacting || Instant::now() < self.guard_cursor_until;
+            let urgent = interacting || self.menu_hover || now < self.guard_cursor_until;
             self.cursor.reassert(over_dock, urgent);
         }
         if let Some(tap) = &self.tap {
-            let rects = self
+            let mut rects: Vec<input::Rect> = self
                 .tray
                 .as_ref()
                 .and_then(|t| t.frame())
                 .map(|r| input::Rect::new(r.x, r.y, r.w, r.h))
                 .into_iter()
                 .collect();
+            rects.extend(menu_bar);
+            rects.extend(self.menu_rects.iter().copied());
+            rects.extend(self.toolbar_pass_through());
             tap.set_pass_through(rects);
         }
     }
@@ -720,6 +796,8 @@ impl Controller {
             return;
         }
         self.moving = true;
+        // Swift: show the toolbar for a moment on the new display.
+        self.toolbar.reveal_until = Some(Instant::now() + Duration::from_millis(1500));
         self.scene.release();
         self.scene.ink.clear();
         self.scene.particles.clear();

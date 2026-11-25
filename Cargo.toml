@@ -14,7 +14,7 @@ tinyhand-platform = { path = "crates/platform" }
 # GPUI from Zed's main branch: the crates.io release (0.2.2) has no Wayland layer-shell
 # windows. Run scripts/fetch-gpui.sh first; it puts Zed at the pinned commit in vendor/zed.
 gpui = { path = "vendor/zed/crates/gpui" }
-gpui_platform = { path = "vendor/zed/crates/gpui_platform", features = ["runtime_shaders", "wayland", "x11"] }
+gpui_platform = { path = "vendor/zed/crates/gpui_platform", features = ["runtime_shaders", "font-kit", "wayland", "x11"] }
 image = { version = "0.25.10", default-features = false, features = ["png"] }
 raw-window-handle = "0.6.2"
 
