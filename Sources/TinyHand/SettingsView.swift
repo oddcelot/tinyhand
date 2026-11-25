@@ -966,6 +966,17 @@ private struct AppearancePage: View {
                 Toggle("", isOn: model.binding({ Preferences.showShadow }, { Preferences.showShadow = $0 }))
                     .toggleStyle(.switch).labelsHidden().focusable(false)
             }
+            Row("Tap effect", detail: "Plays where the pointer taps.") {
+                Picker("", selection: model.binding({ Preferences.tapEffect }, { Preferences.tapEffect = $0 })) {
+                    ForEach(TapEffectChoice.allCases, id: \.self) { choice in
+                        Text(choice.title).tag(choice)
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .fixedSize()
+                .focusable(false)
+            }
         }
     }
 }

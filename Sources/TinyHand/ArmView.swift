@@ -19,6 +19,7 @@ final class ArmView: NSView {
     private let liftFrac: CGFloat = 0.06
 
     let ink = Ink()
+    let effect = TapEffect()
     var held = false
     var inkWidth: CGFloat { max(3, bounds.height * 0.0055) }
 
@@ -59,6 +60,7 @@ final class ArmView: NSView {
         root.addSublayer(group)
 
         root.addSublayer(dotLayer)
+        root.addSublayer(effect.layer)
 
         group.masksToBounds = false
         group.addSublayer(rodLayer)
@@ -116,6 +118,11 @@ final class ArmView: NSView {
 
     func press() {
         pressAmount = 1
+    }
+
+    func playTapEffect(at point: CGPoint) {
+        let unit = bounds.height / 900 * handLenFrac / 0.13
+        effect.play(Preferences.tapEffect, at: point, unit: unit)
     }
 
     func aim(cursor: CGPoint) {

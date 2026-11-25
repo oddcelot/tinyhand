@@ -119,6 +119,11 @@ enum Preferences {
         set { set(newValue.rawValue, "tapSound") }
     }
 
+    static var tapEffect: TapEffectChoice {
+        get { defaults.string(forKey: "tapEffect").flatMap(TapEffectChoice.init(rawValue:)) ?? .off }
+        set { set(newValue.rawValue, "tapEffect") }
+    }
+
     static var laserSound: Bool {
         get { defaults.object(forKey: "sound.laser") as? Bool ?? false }
         set { set(newValue, "sound.laser") }
@@ -187,7 +192,7 @@ enum Preferences {
     static func resetAll() {
         for key in ["shortcut.toggle", "shortcut.clear", "pointerSize", "showShadow", "fadeSeconds",
                     "sound.hands", "sound.laser", "interactKey", "interactKeepsHand", "doubleShiftClickThrough", "pinnedStyles", "pointerStyle",
-                    "inkChoice", "showInkButton", "showToolbar", "tapSound"] {
+                    "inkChoice", "showInkButton", "showToolbar", "tapSound", "tapEffect"] {
             defaults.removeObject(forKey: key)
         }
         NotificationCenter.default.post(name: changed, object: nil)

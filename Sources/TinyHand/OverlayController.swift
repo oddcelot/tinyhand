@@ -79,6 +79,9 @@ final class OverlayController {
             self.tapSound.play()
             self.toolbar.hideHint()
             self.downPoint = self.localMouse()
+            if let point = self.downPoint {
+                self.armView.playTapEffect(at: point)
+            }
             self.dragEvents = 0
             Log.write("press at \(self.downPoint.map { "\(Int($0.x)),\(Int($0.y))" } ?? "?")")
             self.noteButtonEvent()
@@ -475,6 +478,7 @@ final class OverlayController {
         armView.held = false
         downPoint = nil
         armView.ink.clear()
+        armView.effect.clear()
         window.ignoresMouseEvents = true
         window.orderOut(nil)
         toolbar.hide()
@@ -714,6 +718,7 @@ final class OverlayController {
                 revealUntil = Date().addingTimeInterval(1.5)
             }
             armView.ink.clear()
+            armView.effect.clear()
             window.setFrame(screen.frame, display: false)
             armView.frame = NSRect(origin: .zero, size: screen.frame.size)
             toolbar.place(on: screen)
