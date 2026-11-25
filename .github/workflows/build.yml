@@ -7,9 +7,62 @@ on:
 
 jobs:
   build:
-    runs-on: macos-latest
-    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-24.04, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
-      - name: Build (universal)
-        run: swift build -c release --arch arm64 --arch x86_64
+
+      - name: Linux build dependencies
+        if: runner.os == 'Linux'
+        # Same list as tests/linux/ubuntu/Dockerfile.build.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            ca-certificates curl git jq make cmake pkg-config gcc g++ clang lld llvm build-essential \
+            libasound2-dev libfontconfig-dev libfreetype-dev libgit2-dev libglib2.0-dev libssl-dev \
+            libva-dev libvulkan-dev libwayland-dev libx11-dev libx11-xcb-dev libxcb1-dev \
+            libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxcb-xkb-dev libxkbcommon-dev \
+            libxkbcommon-x11-dev libxrandr-dev libxi-dev libxcursor-dev libdrm-dev libgbm-dev \
+            libegl-dev libzstd-dev libsqlite3-dev dpkg-dev xz-utils
+
+      - name: Fetch GPUI
+        run: scripts/fetch-gpui.sh
+
+      - name: Rust toolchain (from rust-toolchain.toml)
+        run: rustup show active-toolchain || rustup toolchain install
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build
+        run: cargo build --release -p tinyhand
+
+      - name: Test
+        run: cargo test --workspace
+
+      - name: macOS bundle (ad hoc signed)
+        if: runner.os == 'macOS'
+        run: scripts/build-app.sh
+
+      - name: Windows installer
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress }
+          & $iscc /DVersion=1.1.0 packaging\windows\tinyhand.iss
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tinyhand-${{ matrix.os }}
+          if-no-files-found: ignore
+          path: |
+            dist/TinyHand.app
+            dist/windows/*.exe
+            target/release/tinyhand

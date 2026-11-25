@@ -3,7 +3,7 @@
 //! The binary doesn't link Sparkle. [`Updater::start`] loads `Sparkle.framework` from the
 //! bundle's `Contents/Frameworks` at runtime and makes an `SPUStandardUpdaterController`,
 //! but only when the app runs from a `.app` whose Info.plist has `SUFeedURL` (release
-//! builds; `scripts/release.sh --rust` writes it). Everywhere else `start` gives `None`
+//! builds; `scripts/release.sh` writes it). Everywhere else `start` gives `None`
 //! and the app hides "Check for Updates…" and the settings rows, as the Swift app does.
 //!
 //! Create and use it on the main thread.

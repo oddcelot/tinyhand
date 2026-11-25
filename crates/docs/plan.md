@@ -1,8 +1,8 @@
 # Plan: one Rust codebase for macOS, Windows and Linux
 
 The Swift app (`Sources/TinyHand/`, described in `swift-reference.md`) is ported to the
-Rust workspace in `crates/`. The Swift app stays the macOS release until the Rust app does
-everything it does; then `Sources/`, `Package.swift` and the Swift build scripts go.
+Rust workspace in `crates/`. Done: the Swift app is removed and the Rust app is the
+release on every platform.
 
 ## Where things go
 
@@ -22,7 +22,7 @@ everything it does; then `Sources/`, `Package.swift` and the Swift build scripts
 | Status item and menu | `platform::tray`: NSStatusItem on macOS, Win32 tray on Windows, StatusNotifierItem (D-Bus) on Linux |
 | Overlay, Toolbar, Settings, Welcome windows | `app`, in GPUI |
 | Sparkle updates | `platform::updater`: Sparkle loaded from the bundle at runtime (macOS); stub elsewhere |
-| `scripts/lib.sh` bundle, sign, DMG, appcast | `scripts/build-rust-app.sh`, `release.sh --rust`; `.deb` via `cargo deb`; Inno Setup on Windows |
+| `scripts/lib.sh` bundle, sign, DMG, appcast | `scripts/build-app.sh`, `release.sh`; `.deb` via `cargo deb`; Inno Setup on Windows |
 
 ## Decisions that differ from the Swift app
 
@@ -53,43 +53,33 @@ key binding) are the way to turn it on.
 4. **Windows** (done): toolbar and ink tray; welcome card; settings window with every
    page; hand maker page.
 5. **Shipping** (done, apart from real-machine checks):
-   - macOS: `scripts/build-rust-app.sh [--universal] [--with-updates]` →
-     `dist/rust/TinyHand.app`, bundle id `com.kamranahmed.tinyhand.rs`;
-     `release.sh --rust` for DMG, notarisation and appcast.
+   - macOS: `scripts/build-app.sh [--universal] [--with-updates]` →
+     `dist/TinyHand.app`, bundle id `com.kamranahmed.tinyhand`;
+     `release.sh` for DMG, notarisation and appcast.
    - `tinyhand://` URLs through GPUI's `on_open_urls`, at launch and while running.
    - Sparkle loaded at runtime when Info.plist has `SUFeedURL`; tray "Check for
      Updates…", About button, General "Check for updates automatically".
    - Ubuntu `.deb` with hands, sounds and tray icons; Docker install test under Sway,
      X11 and GNOME (`tests/linux/ubuntu/`).
    - Windows: Inno Setup script and plan in `packaging/windows/`; CI for all three OSes
-     in `.github/workflows/rust.yml`.
+     in `.github/workflows/build.yml`.
 
 ## What's left
 
 1. **Real-machine checks.**
-   - macOS: a signed, notarised `release.sh --rust --skip-notarize` dry run, then a real
+   - macOS: a signed, notarised `release.sh --skip-notarize` dry run, then a real
      one; an actual Sparkle update from an older Rust build; Accessibility prompt and
      event tap on a clean Mac; Intel Mac (the universal build runs under Rosetta).
    - Ubuntu desktop on real hardware (GNOME on Wayland and X11, KDE): transparency, tray,
      shortcuts, sound.
    - Windows 10/11: everything (see `packaging/windows/README.md`); the app has only been
-     type-checked for Windows and built in CI.
+     type-checked for Windows; CI builds it once the branch is pushed.
 2. **Small gaps**: the workspace version in `Cargo.toml` is kept in step with `VERSION`
    by hand; the toolbar doesn't open on X11/XWayland (only on layer shell, seen in the Docker runs); no `.ico` for Windows; no `tinyhand://` handler on Linux (a desktop entry with
    `x-scheme-handler/tinyhand` would do it); updates on Windows and Linux.
-3. **Cut-over: replace the Swift app.**
-   1. In `scripts/build-rust-app.sh` set `RUST_BUNDLE_ID="$BUNDLE_ID"`
-      (`com.kamranahmed.tinyhand`) so Sparkle updates the installed Swift app in place and
-      it keeps its Accessibility permission (the binary name in the bundle stays
-      `TinyHand`). Settings are imported from UserDefaults on first run.
-   2. Make `release.sh` build Rust by default (drop `--rust` and the Swift branch),
-      `build-app.sh` call `build-rust-app.sh`, and `.github/workflows/build.yml`/
-      `release.yml` use the Rust build; keep the appcast URL and the Ed key.
-   3. Bump the workspace version to the next release (newer than the last Swift
-      `CFBundleVersion`, which is a timestamp, so the build number from `release.sh` is
-      what counts).
-   4. Remove `Sources/`, `Package.swift`, `Package.resolved` and the Swift-only bits of
-      `scripts/lib.sh` (`quit_running_app` by process name; `sparkle_framework` then always
-      downloads); move `crates/docs/swift-reference.md` to history or delete it.
-   5. Update the root `README.md` (install, build, platforms) and `docs/` (the site:
-      Linux and Windows downloads).
+3. **Cut-over** (done): the bundle id is `com.kamranahmed.tinyhand` again, so Sparkle
+   updates an installed Swift copy in place; `build-app.sh`, `release.sh` and the CI
+   workflows build the Rust app; `Sources/`, `Package.swift` and `Package.resolved` are
+   gone. Still to do: update the website in `docs/` for Linux and Windows downloads,
+   and make sure the first Rust release's build number is newer than the last Swift
+   one (`release.sh` uses a timestamp, so it is).

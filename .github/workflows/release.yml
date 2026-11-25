@@ -21,6 +21,13 @@ jobs:
       - name: Install create-dmg
         run: brew install create-dmg
 
+      - name: Rust toolchain (from rust-toolchain.toml) and the Intel target
+        run: |
+          rustup show active-toolchain || rustup toolchain install
+          rustup target add x86_64-apple-darwin
+
+      - uses: Swatinem/rust-cache@v2
+
       - name: Import the Developer ID certificate
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}

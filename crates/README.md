@@ -1,8 +1,7 @@
 # TinyHand in Rust
 
-The cross-platform TinyHand, built on [GPUI](https://www.gpui.rs). It is replacing the
-Swift app in `Sources/` one feature at a time; until it has everything, the Swift app
-stays the macOS release.
+TinyHand for macOS, Windows and Linux, built on [GPUI](https://www.gpui.rs). It replaced
+the original Swift app (macOS only); `crates/docs/swift-reference.md` records what that app did.
 
 | Crate | What's in it |
 |---|---|
@@ -34,37 +33,34 @@ click until it is turned off).
 
 ## Packaging
 
-### macOS: `dist/rust/TinyHand.app`
+### macOS: `dist/TinyHand.app`
 
 ```sh
-scripts/build-rust-app.sh                  # this Mac's architecture, ad hoc signed
-scripts/build-rust-app.sh --universal      # arm64 + x86_64 (adds the rustup target), lipo
-CODESIGN_IDENTITY="Developer ID Application: …" scripts/build-rust-app.sh
-scripts/release.sh --rust [--skip-notarize]   # universal, update keys, notarise, DMG, appcast
+scripts/build-app.sh                  # this Mac's architecture, ad hoc signed
+scripts/build-app.sh --universal      # arm64 + x86_64 (adds the rustup target), lipo
+CODESIGN_IDENTITY="Developer ID Application: …" scripts/build-app.sh
+scripts/release.sh [--skip-notarize]  # universal, update keys, notarise, DMG, appcast
 ```
 
-Same bundle layout as the Swift app (`scripts/lib.sh` `make_bundle`): hand images, tap
-sounds and menu bar icons in `Contents/Resources` (where `assets.rs` looks first next to
-the binary), `tinyhand.png` for the welcome card, `AppIcon.icns`/`Assets.car`,
-`LSUIElement`, the `tinyhand` URL scheme, Sparkle in `Contents/Frameworks`.
+`scripts/lib.sh` `make_bundle` lays out the bundle: hand images, tap sounds and menu bar
+icons in `Contents/Resources` (where `assets.rs` looks first next to the binary),
+`tinyhand.png` for the welcome card, `AppIcon.icns`/`Assets.car`, `LSUIElement`, the
+`tinyhand` URL scheme, Sparkle in `Contents/Frameworks`.
 
-- **Bundle id `com.kamranahmed.tinyhand.rs`** for now, so it has its own Accessibility
-  permission and doesn't collide with the installed Swift app. Settings are separate
-  anyway (`settings.json`; on its first run the Rust app imports the Swift app's
-  UserDefaults). At cut-over set `RUST_BUNDLE_ID="$BUNDLE_ID"` in
-  `scripts/build-rust-app.sh` so updates from the Swift app land on the same id.
+- **Bundle id `com.kamranahmed.tinyhand`**, the same as the Swift app had, so Sparkle
+  updates an installed Swift copy in place. Settings move to `settings.json`; on its
+  first run the app imports the Swift app's UserDefaults. Custom hands stay in
+  `~/Library/Application Support/TinyHand/Hands`.
 - **`tinyhand://` URLs**: GPUI's `on_open_urls` hands them to the controller, both at
   launch and while running. A second launch with a URL argument forwards it to the
   running copy (`instance.rs`).
 - **Sparkle**: not linked. When the bundle's Info.plist has `SUFeedURL` (only
-  `--with-updates`, which `release.sh --rust` passes) `platform::updater` loads
+  `--with-updates`, which `release.sh` passes) `platform::updater` loads
   `Contents/Frameworks/Sparkle.framework` at runtime and starts
   `SPUStandardUpdaterController`; then the tray shows "Check for Updates…", About has the
   button and General the "Check for updates automatically" switch. Ad hoc builds are
   signed without hardened runtime: library validation refuses an ad hoc Sparkle in an
   ad hoc app ("different Team IDs").
-- **Careful with `open tinyhand://…`** while the Swift app is installed: both register the
-  scheme. Use `open -b com.kamranahmed.tinyhand.rs 'tinyhand://sound/toggle'`.
 
 ### Ubuntu: `dist/tinyhand_1.1.0-1_amd64.deb`
 

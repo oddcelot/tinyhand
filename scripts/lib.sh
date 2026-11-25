@@ -107,17 +107,9 @@ sign_app() {
     codesign --verify --deep --strict "$app"
 }
 
-# Sparkle.framework: SwiftPM's copy if `swift build` has fetched it, else the one in the
-# Sparkle release download (the Rust build doesn't run SwiftPM).
+# Sparkle.framework, from the Sparkle release download.
 sparkle_framework() {
-    local fw=""
-    if [[ -d "$ROOT/.build/artifacts" ]]; then
-        fw="$(find "$ROOT/.build/artifacts" -path "*macos-arm64_x86_64/Sparkle.framework" -maxdepth 6 | head -1)"
-    fi
-    if [[ -z "$fw" ]]; then
-        fw="$(dirname "$(sparkle_tools)")/Sparkle.framework"
-    fi
-    echo "$fw"
+    echo "$(dirname "$(sparkle_tools)")/Sparkle.framework"
 }
 
 sparkle_tools() {

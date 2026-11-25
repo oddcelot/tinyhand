@@ -6,13 +6,10 @@ cd "$ROOT"
 IDENTITY="${CODESIGN_IDENTITY:-Developer ID Application: Kamran Ahmed (6QG84AK9XP)}"
 PROFILE="${NOTARY_PROFILE:-notarytool-profile}"
 SKIP_NOTARIZE=false
-# --rust: the Rust app (crates/app) instead of the Swift one, through build-rust-app.sh.
-RUST=false
 for arg in "$@"; do
     case "$arg" in
         --skip-notarize) SKIP_NOTARIZE=true ;;
-        --rust) RUST=true ;;
-        *) echo "usage: $0 [--skip-notarize] [--rust]" >&2; exit 2 ;;
+        *) echo "usage: $0 [--skip-notarize]" >&2; exit 2 ;;
     esac
 done
 
@@ -34,19 +31,10 @@ notarize() {
 
 rm -rf "$OUT"
 mkdir -p "$OUT"
-if [[ "$RUST" == true ]]; then
-    echo "==> Building $APP_NAME $VERSION from Rust (universal), signing with $IDENTITY"
-    CODESIGN_IDENTITY="$IDENTITY" SIGN_TIMESTAMP=1 scripts/build-rust-app.sh \
-        --universal --with-updates --out="$OUT" --build-number="$BUILD_NUMBER"
-else
-    echo "==> Building $APP_NAME $VERSION (universal)"
-    swift build -c release --arch arm64 --arch x86_64
-    make_bundle .build/apple/Products/Release/$APP_NAME "$APP" "$BUILD_NUMBER" --with-updates
-    lipo -info "$APP/Contents/MacOS/$APP_NAME"
-
-    echo "==> Signing with $IDENTITY"
-    sign_app "$APP" "$IDENTITY" --timestamp
-fi
+echo "==> Building $APP_NAME $VERSION (universal), signing with $IDENTITY"
+scripts/fetch-gpui.sh
+CODESIGN_IDENTITY="$IDENTITY" SIGN_TIMESTAMP=1 scripts/build-app.sh \
+    --universal --with-updates --out="$OUT" --build-number="$BUILD_NUMBER"
 
 if [[ "$SKIP_NOTARIZE" == false ]]; then
     echo "==> Notarizing the app"

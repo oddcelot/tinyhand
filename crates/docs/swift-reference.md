@@ -1,8 +1,9 @@
 # Porting the Swift app to Rust
 
-What the Swift app in `Sources/TinyHand/` does, file by file, so the Rust app can match
-it. Written from the Swift code at the start of the port; the Swift stays the reference
-until the Rust app replaces it. Numbers and key names are copied exactly.
+What the original Swift app (`Sources/TinyHand/`, removed when the Rust app replaced it;
+see the git history before the commit "Replace the Swift app with the Rust app") did,
+file by file. Written from the Swift code at the start of the port; the Rust code's
+comments refer to these files. Numbers and key names are copied exactly.
 
 
 ## main.swift
