@@ -4,10 +4,11 @@ use gpui::{
     AnyElement, ClickEvent, Context, FontWeight, InteractiveElement, IntoElement, ParentElement, PromptLevel,
     StatefulInteractiveElement, Styled, Window, div, img, px,
 };
+use gpui::prelude::FluentBuilder;
 use tinyhand_core::settings::Shortcut;
 use tinyhand_platform::hotkeys::HotkeyId;
 
-use super::ui::{Theme, card, text, text_button};
+use super::ui::{Theme, card, pill_button, text, text_button};
 use super::{SettingsWindow, app_icon, icons, mac};
 
 const LINKS: [(&str, &str, &str); 4] = [
@@ -36,7 +37,8 @@ fn link_row(t: &Theme, title: &'static str, detail: &'static str, url: &'static 
         .into_any_element()
 }
 
-pub fn render(_this: &mut SettingsWindow, t: &Theme, cx: &mut Context<SettingsWindow>) -> AnyElement {
+pub fn render(this: &mut SettingsWindow, t: &Theme, cx: &mut Context<SettingsWindow>) -> AnyElement {
+    let updates = this.controller.read(cx).updater.is_some();
     let tagline = if mac() { "A tiny hand for your Mac. Free and open source." } else { "A tiny hand for your screen. Free and open source." };
     div()
         .flex()
@@ -56,7 +58,15 @@ pub fn render(_this: &mut SettingsWindow, t: &Theme, cx: &mut Context<SettingsWi
                         .child(text("TinyHand", 18., t.label()).font_weight(FontWeight::BOLD))
                         .child(text(format!("Version {}", env!("CARGO_PKG_VERSION")), 12., t.secondary()))
                         .child(text(tagline, 12., t.secondary())),
-                ),
+                )
+                .child(div().flex_1())
+                .when(updates, |d| {
+                    d.child(pill_button(t, "check-updates", "Check for Updates", cx, |this, _, cx| {
+                        if let Some(updater) = &this.controller.read(cx).updater {
+                            updater.check_for_updates();
+                        }
+                    }))
+                }),
         )
         .child(card(t, None, LINKS.iter().map(|&(a, b, c)| link_row(t, a, b, c)).collect()))
         .child(div().flex().justify_end().child(text_button(t, "reset-all", "Reset all settings…", cx, reset_all)))

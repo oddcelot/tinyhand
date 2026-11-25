@@ -8,9 +8,11 @@ pub const TOGGLE: &str = "toggle";
 pub const CLEAR: &str = "clear";
 pub const SOUND: &str = "sound";
 pub const SETTINGS: &str = "settings";
+pub const UPDATES: &str = "updates";
 pub const QUIT: &str = "quit";
 
-pub fn menu(settings: &Settings, active: bool, sound_on: bool, trusted: bool) -> Vec<MenuEntry> {
+/// `updates`: whether there is an updater (a release build on macOS), for "Check for Updates…".
+pub fn menu(settings: &Settings, active: bool, sound_on: bool, trusted: bool, updates: bool) -> Vec<MenuEntry> {
     let mac = cfg!(target_os = "macos");
     let mut allow = MenuItem::new(ALLOW, "Allow Accessibility…");
     allow.visible = !trusted;
@@ -26,16 +28,19 @@ pub fn menu(settings: &Settings, active: bool, sound_on: bool, trusted: bool) ->
         prefs.shortcut_hint = Some("⌘,".into());
         quit.shortcut_hint = Some("⌘Q".into());
     }
-    vec![
+    let mut entries = vec![
         MenuEntry::Item(allow),
         MenuEntry::Item(toggle),
         MenuEntry::Item(clear),
         MenuEntry::Item(sound),
         MenuEntry::Separator,
         MenuEntry::Item(prefs),
-        MenuEntry::Separator,
-        MenuEntry::Item(quit),
-    ]
+    ];
+    if updates {
+        entries.push(MenuEntry::Item(MenuItem::new(UPDATES, "Check for Updates…")));
+    }
+    entries.extend([MenuEntry::Separator, MenuEntry::Item(quit)]);
+    entries
 }
 
 pub fn tooltip(active: bool, click_through: bool) -> &'static str {

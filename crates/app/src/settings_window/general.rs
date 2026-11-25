@@ -109,29 +109,37 @@ pub fn render(this: &mut SettingsWindow, t: &Theme, cx: &mut Context<SettingsWin
     ));
     blocks.push(card(t, Some("Clicking for real"), clicking).into_any_element());
 
-    // "Check for updates automatically" joins this card once there is an updater.
-    blocks.push(
-        card(
+    let mut startup = vec![row(
+        t,
+        "Open TinyHand when you log in",
+        None,
+        switch(t, "login", this.login, true, cx, |this, on, _, cx| {
+            match tinyhand_platform::login::set_launch_at_login(on) {
+                Ok(()) => this.login = on,
+                Err(e) => {
+                    crate::controller::log(&format!("open at login: {e}"));
+                    this.login = tinyhand_platform::login::launch_at_login();
+                }
+            }
+            cx.notify();
+        }),
+    )];
+    // Sparkle's own setting, read each time (Sparkle may change it from its first-check prompt).
+    let auto_updates = this.controller.read(cx).updater.as_ref().map(|u| u.automatically_checks());
+    if let Some(on) = auto_updates {
+        startup.push(row(
             t,
-            Some("Startup"),
-            vec![row(
-                t,
-                "Open TinyHand when you log in",
-                None,
-                switch(t, "login", this.login, true, cx, |this, on, _, cx| {
-                    match tinyhand_platform::login::set_launch_at_login(on) {
-                        Ok(()) => this.login = on,
-                        Err(e) => {
-                            crate::controller::log(&format!("open at login: {e}"));
-                            this.login = tinyhand_platform::login::launch_at_login();
-                        }
-                    }
-                    cx.notify();
-                }),
-            )],
-        )
-        .into_any_element(),
-    );
+            "Check for updates automatically",
+            None,
+            switch(t, "auto-updates", on, true, cx, |this, on, _, cx| {
+                if let Some(updater) = &this.controller.read(cx).updater {
+                    updater.set_automatically_checks(on);
+                }
+                cx.notify();
+            }),
+        ));
+    }
+    blocks.push(card(t, Some("Startup"), startup).into_any_element());
 
     div().flex().flex_col().gap(px(22.)).children(blocks).into_any_element()
 }

@@ -100,6 +100,8 @@ pub struct Controller {
     pub(crate) window_kind: Box<dyn Fn() -> WindowKind>,
     tx: UnboundedSender<Msg>,
     tray: Option<Tray>,
+    /// Sparkle, in a release build on macOS (Updater.swift); `None` everywhere else.
+    pub updater: Option<native::updater::Updater>,
     hotkeys: Option<Hotkeys>,
     tap: Option<InputTap>,
     cursor: CursorHider,
@@ -151,6 +153,7 @@ impl Controller {
             window_kind,
             tx,
             tray: None,
+            updater: None,
             hotkeys: None,
             tap: None,
             cursor: CursorHider::new(),
@@ -183,6 +186,15 @@ impl Controller {
     pub fn launch(&mut self) {
         native::cursor::enable_background_hiding();
         self.first_run_login();
+        if native::updater::is_available() {
+            match native::updater::Updater::start() {
+                Ok(updater) => {
+                    log(&format!("updates: Sparkle started, automatic checks {}", updater.automatically_checks()));
+                    self.updater = Some(updater);
+                }
+                Err(e) => log(&format!("no updates: {e}")),
+            }
+        }
         self.setup_tray();
         self.setup_hotkeys();
         self.write_state();
@@ -344,7 +356,7 @@ impl Controller {
     fn update_tray(&mut self) {
         let (active, through, sound) = (self.active, self.click_through, self.sound_on());
         let trusted = input::is_trusted();
-        let menu = tray_menu::menu(&self.settings, active, sound, trusted);
+        let menu = tray_menu::menu(&self.settings, active, sound, trusted, self.updater.is_some());
         if let Some(tray) = self.tray.as_mut() {
             tray.set_active(active);
             tray.set_attention(active && through);
@@ -405,6 +417,12 @@ impl Controller {
                 self.exit(cx);
                 let this = cx.entity();
                 cx.defer(move |cx| crate::settings_window::open(this, cx));
+            }
+            tray_menu::UPDATES => {
+                self.exit(cx);
+                if let Some(updater) = &self.updater {
+                    updater.check_for_updates();
+                }
             }
             tray_menu::QUIT => cx.quit(),
             _ => {}

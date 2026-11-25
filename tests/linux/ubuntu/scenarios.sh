@@ -7,6 +7,9 @@ mkdir -p "$XDG_RUNTIME_DIR" $OUT; chmod 700 "$XDG_RUNTIME_DIR"
 export TH_SECONDS=${TH_SECONDS:-12} TH_DEBUG=1
 # The app starts with the pointer off (a tray app); turn it on at launch, with throwaway settings.
 export TH_ACTIVATE=1 TH_CONFIG_DIR=$(mktemp -d)
+# A session bus, as a desktop has, so the tray (StatusNotifierItem over D-Bus) can start.
+# The GNOME case runs its own (dbus-run-session).
+eval "$(dbus-launch --sh-syntax)"
 BG_TEXT=(sh -c 'seq 1 200; sleep 60')
 PIDS=(); cleanup() { for p in "${PIDS[@]}"; do kill "$p" 2>/dev/null; done; wait 2>/dev/null; PIDS=(); rm -f $XDG_RUNTIME_DIR/wayland-*; }
 
@@ -35,6 +38,9 @@ x11_case() {
   $APP >$OUT/x11-app.log 2>&1 & PIDS+=($!); sleep 3
   xdotool mousemove 700 450; sleep 0.5; xdotool click 1; sleep 0.3; import -window root $OUT/x11-1.png
   sleep 0.4; import -window root $OUT/x11-2.png; xdotool mousemove 1200 600; sleep 0.3; import -window root $OUT/x11-3.png
+  # A second launch with a command goes to the running copy, which rewrites state.json.
+  { grep -o '"soundOn": [a-z]*' $TH_CONFIG_DIR/state.json; $APP sound toggle; echo "exit $?"; sleep 0.5
+    grep -o '"soundOn": [a-z]*' $TH_CONFIG_DIR/state.json; } >$OUT/x11-command.txt 2>&1
   cleanup
 }
 
@@ -72,5 +78,7 @@ INNER
 }
 
 for c in "${@:-sway x11 gnome}"; do
-  for s in $c; do echo "=== $s ==="; ${s}_case; echo "--- $s app log (head/tail) ---"; head -5 $OUT/$s-app.log; echo ...; tail -3 $OUT/$s-app.log; echo "frames: $(grep -c '^frame at' $OUT/$s-app.log)"; done
+  for s in $c; do echo "=== $s ==="; ${s}_case; echo "--- $s app log (head/tail) ---"; head -5 $OUT/$s-app.log; echo ...; tail -3 $OUT/$s-app.log; echo "frames: $(grep -c '^frame at' $OUT/$s-app.log)"
+    echo "frames with the button down: $(grep -c 'down=true' $OUT/$s-app.log)  tray: $(grep -q 'no tray icon' $OUT/$s-app.log && echo missing || echo ok)  missing assets: $(grep -E 'not found' $OUT/$s-app.log | grep -cE 'hand_|tap_|menubar_')"; done
 done
+kill "$DBUS_SESSION_BUS_PID" 2>/dev/null

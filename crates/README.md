@@ -14,7 +14,7 @@ Packaging is in `packaging/`, the Linux test rigs in `tests/linux/`.
 
 ```sh
 scripts/fetch-gpui.sh                           # once: Zed's GPUI at the pinned commit, into vendor/zed
-cargo test -p tinyhand-core                     # logic tests
+cargo test --workspace                          # logic tests
 cargo run --release -p tinyhand                 # tray icon; click it or ⌃⌥H to turn the pointer on
 cargo run --release -p tinyhand -- style lavender   # commands go to the running copy
 ```
@@ -32,22 +32,64 @@ keeps settings and `state.json` away from the real ones. `TH_INPUT=capture` uses
 way of reading the mouse on macOS or Windows (careful: the overlay then swallows every
 click until it is turned off).
 
-## Ubuntu package
+## Packaging
 
-`dist/tinyhand_0.1.0-1_amd64.deb` (built, not committed; ~73 MB, mostly hand
-images). Build it with `tests/linux/ubuntu/build-deb.sh`; see `tests/linux/ubuntu/README.md`.
+### macOS: `dist/rust/TinyHand.app`
 
 ```sh
-sudo apt install ./tinyhand_0.1.0-1_amd64.deb
+scripts/build-rust-app.sh                  # this Mac's architecture, ad hoc signed
+scripts/build-rust-app.sh --universal      # arm64 + x86_64 (adds the rustup target), lipo
+CODESIGN_IDENTITY="Developer ID Application: …" scripts/build-rust-app.sh
+scripts/release.sh --rust [--skip-notarize]   # universal, update keys, notarise, DMG, appcast
+```
+
+Same bundle layout as the Swift app (`scripts/lib.sh` `make_bundle`): hand images, tap
+sounds and menu bar icons in `Contents/Resources` (where `assets.rs` looks first next to
+the binary), `tinyhand.png` for the welcome card, `AppIcon.icns`/`Assets.car`,
+`LSUIElement`, the `tinyhand` URL scheme, Sparkle in `Contents/Frameworks`.
+
+- **Bundle id `com.kamranahmed.tinyhand.rs`** for now, so it has its own Accessibility
+  permission and doesn't collide with the installed Swift app. Settings are separate
+  anyway (`settings.json`; on its first run the Rust app imports the Swift app's
+  UserDefaults). At cut-over set `RUST_BUNDLE_ID="$BUNDLE_ID"` in
+  `scripts/build-rust-app.sh` so updates from the Swift app land on the same id.
+- **`tinyhand://` URLs**: GPUI's `on_open_urls` hands them to the controller, both at
+  launch and while running. A second launch with a URL argument forwards it to the
+  running copy (`instance.rs`).
+- **Sparkle**: not linked. When the bundle's Info.plist has `SUFeedURL` (only
+  `--with-updates`, which `release.sh --rust` passes) `platform::updater` loads
+  `Contents/Frameworks/Sparkle.framework` at runtime and starts
+  `SPUStandardUpdaterController`; then the tray shows "Check for Updates…", About has the
+  button and General the "Check for updates automatically" switch. Ad hoc builds are
+  signed without hardened runtime: library validation refuses an ad hoc Sparkle in an
+  ad hoc app ("different Team IDs").
+- **Careful with `open tinyhand://…`** while the Swift app is installed: both register the
+  scheme. Use `open -b com.kamranahmed.tinyhand.rs 'tinyhand://sound/toggle'`.
+
+### Ubuntu: `dist/tinyhand_1.1.0-1_amd64.deb`
+
+Built in Docker with `tests/linux/ubuntu/build-deb.sh` (`cargo deb`, metadata in
+`crates/app/Cargo.toml`), tested by `tests/linux/ubuntu/run-tests.sh`; see
+`tests/linux/ubuntu/README.md`. Installs `/usr/bin/tinyhand`, hand images, tap sounds and
+tray icons under `/usr/share/tinyhand/`, a desktop entry and the icon.
+
+```sh
+sudo apt install ./tinyhand_1.1.0-1_amd64.deb
 tinyhand                     # or "TinyHand" in the app menu
 ```
 
 - x86-64, built on Ubuntu 24.04: runs on 24.04 and newer, not on 22.04 (glibc 2.39).
-- While it runs it takes every click. **Right-click or Esc quits.**
 - Stock Ubuntu (GNOME) has no layer shell, so it runs through XWayland there.
 - Tested by installing on a clean `ubuntu:24.04` container and running under Sway,
   Xvfb (X11) and GNOME's compositor (mutter 46, headless). Not yet on a real Ubuntu
   desktop; on GNOME, transparency couldn't be checked headless.
+- No `tinyhand://` handler is registered on Linux; use the `tinyhand` command.
+
+### Windows
+
+`packaging/windows/`: an Inno Setup script (per-user install, `tinyhand://` in HKCU) and
+the plan. Not run on Windows yet. CI (`.github/workflows/rust.yml`) builds and tests on
+macOS, Ubuntu 24.04 and Windows and makes the bundle and the installer.
 
 ## Two ways to get the mouse
 

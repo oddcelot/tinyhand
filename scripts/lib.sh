@@ -38,7 +38,7 @@ make_bundle() {
     cp "$ROOT"/assets/menubar_*.png "$app/Contents/Resources/"
 
     local fw
-    fw="$(find "$ROOT/.build/artifacts" -path "*macos-arm64_x86_64/Sparkle.framework" -maxdepth 6 | head -1)"
+    fw="$(sparkle_framework)"
     mkdir -p "$app/Contents/Frameworks"
     ditto "$fw" "$app/Contents/Frameworks/Sparkle.framework"
 
@@ -93,7 +93,10 @@ PLIST
 sign_app() {
     local app="$1" identity="$2" ts="${3:-}"
     local fw="$app/Contents/Frameworks/Sparkle.framework/Versions/B"
-    local sign=(codesign --force --options runtime --sign "$identity")
+    local sign=(codesign --force --sign "$identity")
+    # Hardened runtime (needed for notarisation) turns on library validation, which won't
+    # load an ad hoc signed Sparkle into an ad hoc signed app: they have no Team ID.
+    [[ "$identity" != "-" ]] && sign+=(--options runtime)
     [[ -n "$ts" ]] && sign+=(--timestamp)
     "${sign[@]}" "$fw/XPCServices/Installer.xpc"
     "${sign[@]}" --preserve-metadata=entitlements "$fw/XPCServices/Downloader.xpc"
@@ -102,6 +105,19 @@ sign_app() {
     "${sign[@]}" "$app/Contents/Frameworks/Sparkle.framework"
     "${sign[@]}" "$app"
     codesign --verify --deep --strict "$app"
+}
+
+# Sparkle.framework: SwiftPM's copy if `swift build` has fetched it, else the one in the
+# Sparkle release download (the Rust build doesn't run SwiftPM).
+sparkle_framework() {
+    local fw=""
+    if [[ -d "$ROOT/.build/artifacts" ]]; then
+        fw="$(find "$ROOT/.build/artifacts" -path "*macos-arm64_x86_64/Sparkle.framework" -maxdepth 6 | head -1)"
+    fi
+    if [[ -z "$fw" ]]; then
+        fw="$(dirname "$(sparkle_tools)")/Sparkle.framework"
+    fi
+    echo "$fw"
 }
 
 sparkle_tools() {

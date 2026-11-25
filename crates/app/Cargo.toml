@@ -34,6 +34,8 @@ recommends = "mesa-vulkan-drivers"
 assets = [
     ["target/release/tinyhand", "usr/bin/", "755"],
     ["../../assets/hand_*.png", "usr/share/tinyhand/hands/", "644"],
+    ["../../assets/sounds/tap_*.wav", "usr/share/tinyhand/sounds/", "644"],
+    ["../../assets/menubar_*.png", "usr/share/tinyhand/", "644"],
     ["../../packaging/linux/tinyhand.desktop", "usr/share/applications/", "644"],
     ["../../packaging/linux/tinyhand.png", "usr/share/icons/hicolor/512x512/apps/", "644"],
 ]

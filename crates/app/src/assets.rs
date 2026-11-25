@@ -52,8 +52,14 @@ pub fn hand_image(id: &str, custom: &CustomHands) -> Option<PathBuf> {
     styles::hand_image_path(id, custom.dir(), &hand_dirs())
 }
 
+/// Tray icons: the hand folders, then `share/tinyhand` (where the .deb puts them) and the
+/// repo's `assets/icon`.
 fn find_file(name: &str) -> Option<PathBuf> {
     let mut dirs = hand_dirs();
+    if let Some(bin) = exe_dir() {
+        dirs.push(bin.join("../share/tinyhand"));
+    }
+    dirs.push("/usr/share/tinyhand".into());
     dirs.push(repo_assets().join("icon"));
     dirs.into_iter().map(|d| d.join(name)).find(|p| p.is_file())
 }

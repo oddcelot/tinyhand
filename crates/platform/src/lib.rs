@@ -13,6 +13,7 @@ pub mod login;
 pub mod menus;
 pub mod sound;
 pub mod tray;
+pub mod updater;
 
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 
