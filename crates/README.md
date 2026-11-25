@@ -1,13 +1,22 @@
-# GPUI overlay spike
+# TinyHand in Rust
 
-Can TinyHand's pointer run on [GPUI](https://www.gpui.rs) so it works on Windows and Linux
-too? This draws the hand on its stick on a window above everything, follows the mouse,
-and throws glass fairy dust when the left button goes down.
+The cross-platform TinyHand, built on [GPUI](https://www.gpui.rs). It is replacing the
+Swift app in `Sources/` one feature at a time; until it has everything, the Swift app
+stays the macOS release.
+
+| Crate | What's in it |
+|---|---|
+| `core` (`tinyhand-core`) | No UI or OS code: measuring hand images, rotating them, the arm geometry, fairy dust. Unit-tested. |
+| `platform` (`tinyhand-platform`) | Per-OS code: making the overlay window float and ignore clicks, reading the mouse. |
+| `app` (`tinyhand`) | The GPUI app: windows and drawing. |
+
+Packaging is in `packaging/`, the Linux test rigs in `tests/linux/`.
 
 ```sh
-./fetch-gpui.sh                     # once: Zed's GPUI at the pinned commit, into vendor/zed
-cargo run --release                 # Butterfly 3D
-cargo run --release -- lavender     # any hand_<name>.png in ../../assets
+scripts/fetch-gpui.sh                           # once: Zed's GPUI at the pinned commit, into vendor/zed
+cargo test -p tinyhand-core                     # logic tests
+cargo run --release -p tinyhand                 # Butterfly 3D
+cargo run --release -p tinyhand -- lavender     # any hand_<name>.png in assets/
 ```
 
 Quit with Ctrl+C (on Linux also right-click or Esc). Needs Rust 1.100 (`rust-toolchain.toml` asks rustup for it).
@@ -19,12 +28,12 @@ the overlay then swallows every click until it quits).
 
 ## Ubuntu package
 
-`dist/tinyhand-preview_0.1.0-1_amd64.deb` (built, not committed; ~73 MB, mostly hand
-images). Build it with `linux-test/ubuntu/build-deb.sh`; see `linux-test/ubuntu/README.md`.
+`dist/tinyhand_0.1.0-1_amd64.deb` (built, not committed; ~73 MB, mostly hand
+images). Build it with `tests/linux/ubuntu/build-deb.sh`; see `tests/linux/ubuntu/README.md`.
 
 ```sh
-sudo apt install ./tinyhand-preview_0.1.0-1_amd64.deb
-tinyhand-overlay             # or "TinyHand (preview)" in the app menu
+sudo apt install ./tinyhand_0.1.0-1_amd64.deb
+tinyhand                     # or "TinyHand" in the app menu
 ```
 
 - x86-64, built on Ubuntu 24.04: runs on 24.04 and newer, not on 22.04 (glibc 2.39).
@@ -67,12 +76,12 @@ double-⇧), hide the system cursor (GPUI has no hidden cursor style), more than
 every Space. About 5–6% CPU and 80 MB.
 
 **GPUI covers the drawing only.** Window level, click-through, Spaces, Dock icon and
-reading the mouse in watch mode are native code in `src/native.rs`.
+reading the mouse in watch mode are native code in `crates/platform`.
 
-**GPUI can't rotate raster images.** Only SVG icons take a transform. `src/hand.rs`
+**GPUI can't rotate raster images.** Only SVG icons take a transform. `crates/core/src/hand.rs`
 rotates the hand on the CPU and keeps one image per half degree.
 
-**Windows: written, not run.** `native.rs` makes the window layered, topmost and (in
+**Windows: written, not run.** `crates/platform` makes the window layered, topmost and (in
 watch mode) transparent to clicks, and reads the cursor with `GetCursorPos`. It
 type-checks for `x86_64-pc-windows-msvc`; the whole crate can't be built for Windows from
 a Mac. Open question: does GPUI's DirectComposition window still draw once it is layered?
@@ -80,7 +89,7 @@ a Mac. Open question: does GPUI's DirectComposition window still draw once it is
 **Linux works, in a headless rig.** Under Sway (Wayland, layer shell) and Xvfb with
 xcompmgr (X11), both in Docker on software rendering, the overlay draws transparently
 over other apps, the fingertip follows the pointer, and a click lands on the overlay and
-throws the dust. See `linux-test/`. Not tried on a real desktop yet, nor on KDE,
+throws the dust. See `tests/linux/`. Not tried on a real desktop yet, nor on KDE,
 Hyprland or a real X11 window manager.
 
 Two things the Linux run turned up:
@@ -93,7 +102,7 @@ Two things the Linux run turned up:
 
 The crates.io release of GPUI (0.2.2) has no layer-shell windows. Zed's main branch does
 (`WindowKind::LayerShell`), so the spike uses it at a pinned commit. It is fetched by
-`fetch-gpui.sh` rather than a Cargo git dependency because the Zed repository contains two
+`scripts/fetch-gpui.sh` rather than a Cargo git dependency because the Zed repository contains two
 packages named `gpui` and Cargo picks the wrong one. The few dependency patches Zed's
 workspace applies are repeated in `Cargo.toml`.
 

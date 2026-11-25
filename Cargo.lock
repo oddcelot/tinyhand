@@ -4784,12 +4784,27 @@ dependencies = [
 ]
 
 [[package]]
-name = "tinyhand-overlay"
+name = "tinyhand"
 version = "0.1.0"
 dependencies = [
  "gpui",
  "gpui_platform",
  "image",
+ "tinyhand-core",
+ "tinyhand-platform",
+]
+
+[[package]]
+name = "tinyhand-core"
+version = "0.1.0"
+dependencies = [
+ "image",
+]
+
+[[package]]
+name = "tinyhand-platform"
+version = "0.1.0"
+dependencies = [
  "objc",
  "raw-window-handle",
  "wayland-client",

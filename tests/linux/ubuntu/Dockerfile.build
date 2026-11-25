@@ -13,4 +13,4 @@ ENV RUSTUP_HOME=/opt/rustup CARGO_HOME=/opt/cargo PATH=/opt/cargo/bin:$PATH
 RUN curl -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain 1.100.0
 RUN cargo install cargo-deb --locked && cp /opt/cargo/bin/cargo-deb /usr/local/bin/ && rm -rf /opt/cargo/registry
 ENV CARGO_TARGET_DIR=/target
-WORKDIR /work/spike/gpui-overlay
+WORKDIR /work

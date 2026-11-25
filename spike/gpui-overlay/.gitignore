@@ -1,7 +1,0 @@
-target/
-vendor/
-dist/
-linux-test/out/
-linux-test/ubuntu/out/
-linux-test/ubuntu/vpointer
-linux-test/vpointer/target/

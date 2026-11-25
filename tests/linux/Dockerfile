@@ -18,4 +18,4 @@ RUN curl -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-too
 # Runtime defaults for the test rig; CARGO_HOME is overridden at run time to the host mounts.
 RUN apt-get update && apt-get install -y --no-install-recommends xcompmgr x11-xserver-utils && rm -rf /var/lib/apt/lists/*
 ENV CARGO_TARGET_DIR=/target XDG_RUNTIME_DIR=/tmp/xdg
-WORKDIR /work/spike/gpui-overlay
+WORKDIR /work

@@ -5,7 +5,7 @@
 # real one and a lint test fixture), and Cargo picks the wrong one. Path dependencies
 # name the right directory.
 set -euo pipefail
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/.."
 REV=e84c6c61adb54bc6140a85b307d18cf970c24ab5
 if [[ "$(git -C vendor/zed rev-parse HEAD 2>/dev/null)" == "$REV" ]]; then
     echo "vendor/zed already at $REV"

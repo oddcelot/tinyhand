@@ -1,0 +1,31 @@
+[workspace]
+resolver = "3"
+members = ["crates/core", "crates/platform", "crates/app"]
+exclude = ["tests/linux/vpointer", "vendor"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+
+[workspace.dependencies]
+tinyhand-core = { path = "crates/core" }
+tinyhand-platform = { path = "crates/platform" }
+# GPUI from Zed's main branch: the crates.io release (0.2.2) has no Wayland layer-shell
+# windows. Run scripts/fetch-gpui.sh first; it puts Zed at the pinned commit in vendor/zed.
+gpui = { path = "vendor/zed/crates/gpui" }
+gpui_platform = { path = "vendor/zed/crates/gpui_platform", features = ["runtime_shaders", "wayland", "x11"] }
+image = { version = "0.25.10", default-features = false, features = ["png"] }
+raw-window-handle = "0.6.2"
+
+[workspace.lints.rust]
+# The objc crate's macros check a cfg this workspace doesn't declare.
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(feature, values("cargo-clippy"))'] }
+
+# Zed patches these for GPUI's dependencies; path dependencies don't carry another
+# workspace's patches, so they are repeated here (copied from vendor/zed/Cargo.toml).
+[patch.crates-io]
+async-process = { git = "https://github.com/zed-industries/async-process.git", rev = "0b6d6713570af61806e1e5cb40e0f757cb93fd9d" }
+async-task = { git = "https://github.com/smol-rs/async-task", rev = "41fd3359c75e221bd8b187a8ee361aa309c1714c" }
+calloop = { git = "https://github.com/zed-industries/calloop", rev = "3759371fee14c40066d64777e2a36b6ffcc22590" }
+khronos-egl = { git = "https://github.com/zed-industries/khronos-egl", rev = "42214b36347b108fd9630ca6254b96dde59e04fe" }

@@ -5,3 +5,10 @@ dist/
 *.dmg
 *.zip
 assets/unused/
+# Rust
+/target/
+/vendor/
+tests/linux/out/
+tests/linux/ubuntu/out/
+tests/linux/ubuntu/vpointer
+tests/linux/vpointer/target/

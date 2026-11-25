@@ -3,24 +3,24 @@
 Built on glibc 2.39, so the package runs on Ubuntu 24.04 and newer. All commands run on the
 host from the repo root; Docker runs the amd64 images through Rosetta.
 
-    docker build --platform linux/amd64 -f spike/gpui-overlay/linux-test/ubuntu/Dockerfile.build -t tinyhand-ubuntu-build spike/gpui-overlay/linux-test/ubuntu
-    docker build --platform linux/amd64 -f spike/gpui-overlay/linux-test/ubuntu/Dockerfile.test  -t tinyhand-ubuntu-test  spike/gpui-overlay/linux-test/ubuntu
-    spike/gpui-overlay/linux-test/ubuntu/build-deb.sh        # ~16 min cold; .deb lands in spike/gpui-overlay/dist/
-    spike/gpui-overlay/linux-test/ubuntu/run-tests.sh        # all three; or: run-tests.sh sway x11 gnome (any subset)
+    docker build --platform linux/amd64 -f tests/linux/ubuntu/Dockerfile.build -t tinyhand-ubuntu-build tests/linux/ubuntu
+    docker build --platform linux/amd64 -f tests/linux/ubuntu/Dockerfile.test  -t tinyhand-ubuntu-test  tests/linux/ubuntu
+    tests/linux/ubuntu/build-deb.sh        # ~16 min cold; .deb lands in dist/
+    tests/linux/ubuntu/run-tests.sh        # all three; or: run-tests.sh sway x11 gnome (any subset)
 
 `build-deb.sh` mounts the repo at /work, reuses host `~/.cargo/{registry,git}`, keeps the
 amd64 target dir in the volume `tinyhand-amd64-target`, runs `cargo build --release`, builds
-`vpointer`, then `cargo deb --no-build` (cargo-deb 3.8 honours CARGO_TARGET_DIR; the host's
+`vpointer`, then `cargo deb -p tinyhand --no-build` (cargo-deb 3.8 honours CARGO_TARGET_DIR; the host's
 macOS `target/` is not touched). `vpointer` (x86-64) is copied next to the scripts and is git-ignored-worthy build output.
 
 `run-tests.sh` starts a clean ubuntu:24.04 container with only test tools, runs
-`apt install /dist/tinyhand-preview_*.deb`, then `scenarios.sh` drives sway (headless,
+`apt install /dist/tinyhand_*.deb`, then `scenarios.sh` drives sway (headless,
 vpointer), Xvfb+xcompmgr (xdotool), and mutter (`dbus-run-session`, `mutter --headless
 --wayland --virtual-monitor 1920x1080`). Output goes to `out/`.
 
 ## Results
 
-- Package: `dist/tinyhand-preview_0.1.0-1_amd64.deb`, 73 MB (29.7 MB binary + hand PNGs).
+- Package: `dist/tinyhand_0.1.0-1_amd64.deb`, 73 MB (29.7 MB binary + hand PNGs).
   `Depends: libc6 (>= 2.39), libxcb1 (>= 1.12), libxkbcommon-x11-0, libxkbcommon0`;
   `Recommends: mesa-vulkan-drivers`. The binary dlopens the Wayland, Vulkan and X libs.
 - On bare ubuntu:24.04 `apt install ./x.deb` pulls (with Recommends) libvulkan1,

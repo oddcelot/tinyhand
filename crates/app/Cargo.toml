@@ -1,0 +1,38 @@
+[package]
+name = "tinyhand"
+description = "A hand on a stick that points at things on screen"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+tinyhand-core.workspace = true
+tinyhand-platform.workspace = true
+gpui.workspace = true
+gpui_platform.workspace = true
+image.workspace = true
+
+[lints]
+workspace = true
+
+# `cargo deb -p tinyhand` builds the Ubuntu package (see tests/linux/ubuntu/README.md).
+[package.metadata.deb]
+name = "tinyhand"
+maintainer = "TinyHand contributors"
+copyright = "2026 Kamran Ahmed and TinyHand contributors"
+license-file = ["../../LICENSE", "0"]
+extended-description = """\
+TinyHand for Linux, built with GPUI. The hand follows the mouse and throws fairy dust \
+when you click. Needs a Wayland compositor with layer shell (KDE, Hyprland, Sway) or \
+X11; on GNOME it runs through XWayland."""
+section = "utils"
+priority = "optional"
+# The binary opens these at runtime, so the automatic scan doesn't list them.
+depends = "$auto, libwayland-client0, libvulkan1"
+recommends = "mesa-vulkan-drivers"
+assets = [
+    ["target/release/tinyhand", "usr/bin/", "755"],
+    ["../../assets/hand_*.png", "usr/share/tinyhand/hands/", "644"],
+    ["../../packaging/linux/tinyhand.desktop", "usr/share/applications/", "644"],
+    ["../../packaging/linux/tinyhand.png", "usr/share/icons/hicolor/512x512/apps/", "644"],
+]

@@ -6,7 +6,7 @@
 # Set APP=/path/to/other-binary or APP=none to test only the compositor/tools.
 MODE=${1:-wayland}; shift || true
 HERE=$(cd "$(dirname "$0")" && pwd)
-APP=${APP:-${CARGO_TARGET_DIR:-/target}/release/tinyhand-overlay}
+APP=${APP:-${CARGO_TARGET_DIR:-/target}/release/tinyhand}
 OUT=${OUT:-$HERE/out}
 W=${W:-1920}; H=${H:-1080}
 X1=${X1:-700}; Y1=${Y1:-450}; X2=${X2:-1200}; Y2=${Y2:-600}

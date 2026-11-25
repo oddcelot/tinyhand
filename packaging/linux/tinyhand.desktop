@@ -1,9 +1,9 @@
 [Desktop Entry]
 Type=Application
-Name=TinyHand (preview)
+Name=TinyHand
 Comment=A tiny hand on a stick that points at things on your screen
-Exec=tinyhand-overlay
-Icon=tinyhand-overlay
+Exec=tinyhand
+Icon=tinyhand
 Terminal=false
 Categories=Utility;
 Keywords=pointer;presentation;cursor;

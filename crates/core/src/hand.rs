@@ -4,11 +4,17 @@
 //! GPUI can rotate SVG icons but not raster images, so the rotation happens here on the
 //! CPU. Each angle is made once (in half-degree steps) and kept.
 
-use image::{Frame, RgbaImage, imageops};
+use image::{RgbaImage, imageops};
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use gpui::RenderImage;
+/// A rotated hand ready to draw: pixels in BGRA order (as GPUI wants them) and the size
+/// of its bounding box as a multiple of the unrotated hand's width and height.
+pub struct Rotated {
+    pub bgra: RgbaImage,
+    pub width_factor: f32,
+    pub height_factor: f32,
+}
 
 pub struct Hand {
     /// The hand only (from just above the fingertip down to the wrist), scaled to the
@@ -22,7 +28,7 @@ pub struct Hand {
     pub tip_x: f32,
     pub rod_x: f32,
     pub rod_width: f32,
-    rotated: HashMap<i32, (Arc<RenderImage>, f32, f32)>,
+    rotated: HashMap<i32, Arc<Rotated>>,
 }
 
 impl Hand {
@@ -82,22 +88,22 @@ impl Hand {
         self.rotated.clear();
     }
 
-    /// The hand turned anticlockwise (as seen on screen) by `radians`, with the size of its
-    /// bounding box as a multiple of the unrotated hand's width and height.
-    pub fn rotated(&mut self, radians: f32) -> (Arc<RenderImage>, f32, f32) {
+    /// The hand turned anticlockwise (as seen on screen) by `radians`, to the nearest half
+    /// degree. Returns a key that is the same for every call that gives the same image, so
+    /// callers can keep their own GPU copies.
+    pub fn rotated(&mut self, radians: f32) -> (i32, Arc<Rotated>) {
         let key = (radians.to_degrees() * 2.0).round() as i32;
-        if let Some(hit) = self.rotated.get(&key) {
-            return hit.clone();
-        }
-        let angle = (key as f32 / 2.0).to_radians();
-        let made = rotate(&self.crop, angle);
-        let entry = (
-            Arc::new(RenderImage::new(vec![Frame::new(made.0)])),
-            made.1,
-            made.2,
-        );
-        self.rotated.insert(key, entry.clone());
-        entry
+        let crop = &self.crop;
+        let entry = self.rotated.entry(key).or_insert_with(|| {
+            let (bgra, width_factor, height_factor) = rotate(crop, (key as f32 / 2.0).to_radians());
+            Arc::new(Rotated { bgra, width_factor, height_factor })
+        });
+        (key, entry.clone())
+    }
+
+    /// Size of the fitted hand image in device pixels.
+    pub fn fitted_size(&self) -> (u32, u32) {
+        (self.crop.width(), self.crop.height())
     }
 }
 

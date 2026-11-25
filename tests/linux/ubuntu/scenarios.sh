@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Inside the test container. Usage: scenarios.sh [sway] [x11] [gnome]
-APP=/usr/bin/tinyhand-overlay
+APP=/usr/bin/tinyhand
 OUT=/out; W=1920; H=1080
 mkdir -p /tmp/.X11-unix; chmod 1777 /tmp/.X11-unix   # a real distro creates this at boot
 mkdir -p "$XDG_RUNTIME_DIR" $OUT; chmod 700 "$XDG_RUNTIME_DIR"

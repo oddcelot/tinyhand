@@ -1,0 +1,12 @@
+[package]
+name = "tinyhand-core"
+description = "TinyHand logic with no UI or OS code: hand images, arm geometry, fairy dust"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+image.workspace = true
+
+[lints]
+workspace = true
