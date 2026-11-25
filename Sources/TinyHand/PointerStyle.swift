@@ -19,6 +19,7 @@ struct PointerStyle: Hashable {
     static let coral = PointerStyle("coral")
     static let plush = PointerStyle("plush")
     static let robot = PointerStyle("robot")
+    static let butterfly3d = PointerStyle("butterfly3d")
     static let laser = PointerStyle("laser")
 
     private static let builtIn: [(id: String, title: String, ink: CGColor)] = [
@@ -58,6 +59,9 @@ struct PointerStyle: Hashable {
         ("neon", "Neon", Ink.hex(0xE0309A)),
         ("leaf", "Leaf", Ink.hex(0x3E9E2E)),
         ("cookie", "Gingerbread", Ink.hex(0x9A5E2C)),
+        ("pentacode", "Pentacode", Ink.hex(0x0CA8D1)),
+        ("butterfly", "Butterfly", Ink.hex(0x1991C7)),
+        ("butterfly3d", "Butterfly 3D", Ink.hex(0x1991C7)),
     ]
 
     static var builtInHands: [PointerStyle] {
@@ -72,7 +76,7 @@ struct PointerStyle: Hashable {
         builtInHands + customHands + [.laser]
     }
 
-    static let defaultPinned: [PointerStyle] = [.lavender, .glove, .coral, .plush, .robot, .laser]
+    static let defaultPinned: [PointerStyle] = [.butterfly3d, .lavender, .glove, .coral, .plush, .robot, .laser]
 
     var isCustom: Bool {
         CustomHands.hand(rawValue) != nil
@@ -119,7 +123,7 @@ struct PointerStyle: Hashable {
             if raw == "sunny" {
                 return .coral
             }
-            return raw.flatMap(PointerStyle.init(rawValue:)) ?? .lavender
+            return raw.flatMap(PointerStyle.init(rawValue:)) ?? .butterfly3d
         }
         set { UserDefaults.standard.set(newValue.rawValue, forKey: defaultsKey) }
     }
@@ -288,11 +292,18 @@ struct HandAsset {
         let maxW = counts[top..<searchEnd].max() ?? 0
         guard maxW > 0,
               let fist = (top..<h).first(where: { Double(counts[$0]) > 0.6 * Double(maxW) }),
-              let wrist = (fist..<h).first(where: { Double(counts[$0]) < 0.35 * Double(maxW) }) else {
+              let narrowing = (fist..<h).first(where: { Double(counts[$0]) < 0.35 * Double(maxW) }) else {
             return nil
         }
-        let rodW = counts[min(h - 1, wrist + h / 50)]
         let lastRow = counts.lastIndex(where: { $0 > 0 }) ?? (h - 1)
+        // A hand can get narrow before it ends, like the two lower wing tips of a butterfly.
+        // The rod is stretched to reach the cursor, so anything of the hand left below the
+        // wrist would be stretched with it. Carry on down to where only the stick is left;
+        // the stick is the long even part, so its width is the usual one below the narrowing.
+        let below = counts[narrowing...lastRow].sorted()
+        let stickW = below[below.count / 2]
+        let wrist = (narrowing...lastRow).first(where: { Double(counts[$0]) <= 1.25 * Double(stickW) }) ?? narrowing
+        let rodW = counts[min(h - 1, wrist + h / 50)]
         let from = min(h - 1, wrist + h / 33)
         let handle = (from..<h).first(where: { Double(counts[$0]) > 1.8 * Double(rodW) })
         let rodEnd = handle ?? lastRow
