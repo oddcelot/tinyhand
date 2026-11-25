@@ -1,0 +1,11 @@
+[package]
+name = "vpointer"
+version = "0.1.0"
+edition = "2024"
+
+# A virtual mouse for headless Sway that stays plugged in while the test runs.
+[dependencies]
+wayland-client = "0.31"
+wayland-protocols-wlr = { version = "0.3", features = ["client"] }
+
+[workspace]

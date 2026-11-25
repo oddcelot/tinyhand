@@ -1,0 +1,4 @@
+# Zed's GPUI at the pinned commit needs this compiler (its own rust-toolchain.toml).
+[toolchain]
+channel = "1.100.0"
+profile = "minimal"

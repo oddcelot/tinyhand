@@ -1,9 +1,14 @@
-//! TinyHand overlay spike: can GPUI draw the pointer on a click-through window above
-//! everything, on macOS and Windows?
+//! TinyHand overlay spike: can GPUI draw the pointer on a window above everything, on
+//! macOS, Windows and Linux?
 //!
 //! Draws the hand on its stick following the mouse and throws glass fairy dust when the
-//! left button goes down. Settings, toolbar, drawing, sounds and swallowing the click are
-//! out of scope.
+//! left button goes down. Settings, toolbar, drawing and sounds are out of scope.
+//!
+//! Two ways to get at the mouse (see `Input`):
+//! - macOS and Windows: the overlay lets every click through and reads the mouse with
+//!   native calls. Clicks still reach the app underneath.
+//! - Linux: the overlay takes the mouse itself. That is the only way Wayland reports
+//!   where the pointer is, and it swallows the clicks, which is what TinyHand's tap does.
 //!
 //! Run from this folder:
 //!     cargo run --release                     # Butterfly 3D
@@ -19,9 +24,9 @@ mod native;
 use std::time::{Duration, Instant};
 
 use gpui::{
-    App, Application, BorderStyle, Bounds, Context, Corners, Edges, Hsla, PathBuilder, Pixels,
+    App, BorderStyle, Bounds, Context, Corners, Edges, Hsla, MouseButton, PathBuilder, Pixels,
     Point, Rgba, Window, WindowBackgroundAppearance, WindowBounds, WindowKind, WindowOptions,
-    canvas, linear_color_stop, linear_gradient, point, prelude::*, px, quad, size,
+    canvas, div, linear_color_stop, linear_gradient, point, prelude::*, px, quad, size,
 };
 
 use hand::Hand;
@@ -55,6 +60,16 @@ fn tone(index: usize, alpha: f32, lighten: f32) -> Hsla {
 
 fn white(alpha: f32) -> Hsla {
     Rgba { r: 1.0, g: 1.0, b: 1.0, a: alpha }.into()
+}
+
+/// Where the mouse comes from.
+#[derive(Clone, Copy, PartialEq)]
+enum Input {
+    /// The overlay ignores the mouse; position and button are read with native calls.
+    Watch,
+    /// The overlay covers the screen and takes the mouse, so GPUI's own mouse events say
+    /// where it is. Clicks don't reach the apps underneath.
+    Capture,
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -100,6 +115,12 @@ impl Random {
 }
 
 struct Overlay {
+    input: Input,
+    /// Left button, as GPUI reports it in `Input::Capture`.
+    captured_down: bool,
+    /// Set by a press and cleared by the next frame, so a click that goes down and up
+    /// between two frames still counts.
+    captured_press: bool,
     hand: Hand,
     fitted: bool,
     width: f32,
@@ -125,7 +146,7 @@ enum Draw {
 }
 
 impl Overlay {
-    fn new(hand: Hand, width: f32, height: f32) -> Self {
+    fn new(input: Input, hand: Hand, width: f32, height: f32) -> Self {
         let env = |key: &str| std::env::var(key).ok();
         let fake_mouse = env("TH_FAKE_MOUSE").and_then(|v| {
             let (x, y) = v.split_once(',')?;
@@ -133,6 +154,9 @@ impl Overlay {
         });
         let seed = Instant::now().elapsed().as_nanos() as u64 ^ 0x9E37_79B9_7F4A_7C15;
         Overlay {
+            input,
+            captured_down: false,
+            captured_press: false,
             hand,
             fitted: false,
             width,
@@ -256,7 +280,7 @@ impl Overlay {
     }
 }
 
-fn polygon(points: &[Point<Pixels>]) -> Option<gpui::Path<Pixels>> {
+fn polygon(points: &[Point<Pixels>]) -> Option<gpui::Path> {
     let mut b = PathBuilder::fill();
     b.move_to(points[0]);
     for p in &points[1..] {
@@ -266,7 +290,7 @@ fn polygon(points: &[Point<Pixels>]) -> Option<gpui::Path<Pixels>> {
     b.build().ok()
 }
 
-fn star(cx: f32, cy: f32, radius: f32, angle: f32, pinch: f32) -> Option<gpui::Path<Pixels>> {
+fn star(cx: f32, cy: f32, radius: f32, angle: f32, pinch: f32) -> Option<gpui::Path> {
     let tip = |i: usize| {
         let a = angle + i as f32 * std::f32::consts::FRAC_PI_2;
         (cx + radius * a.cos(), cy + radius * a.sin())
@@ -336,6 +360,7 @@ impl Render for Overlay {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         window.request_animation_frame();
         let now = Instant::now();
+        let debug = std::env::var_os("TH_DEBUG").is_some();
         let dt = now.duration_since(self.last_frame).as_secs_f32().min(0.05);
         self.last_frame = now;
         if self.quit_after.is_some_and(|s| self.started.elapsed() > Duration::from_secs_f32(s)) {
@@ -343,7 +368,19 @@ impl Render for Overlay {
         }
 
         let scale = window.scale_factor();
-        let mut mouse = native::mouse(self.height, scale);
+        let viewport = window.viewport_size();
+        if f32::from(viewport.height) > 0.0 {
+            self.width = f32::from(viewport.width);
+            self.height = f32::from(viewport.height);
+        }
+        let mut mouse = match self.input {
+            Input::Watch => native::mouse(self.height, scale),
+            Input::Capture => {
+                let p = window.mouse_position();
+                let down = self.captured_down || std::mem::take(&mut self.captured_press);
+                native::Mouse { x: f32::from(p.x), y: f32::from(p.y), down }
+            }
+        };
         if let Some((x, y)) = self.fake_mouse {
             mouse.x = x;
             mouse.y = y;
@@ -355,6 +392,9 @@ impl Render for Overlay {
             }
         }
 
+        if debug {
+            eprintln!("frame at {:.3}s mouse {:.0},{:.0} down={}", self.started.elapsed().as_secs_f32(), mouse.x, mouse.y, mouse.down);
+        }
         if mouse.down && !self.was_down {
             self.press = 1.0;
             self.fairy_dust(mouse.x, mouse.y);
@@ -367,7 +407,7 @@ impl Render for Overlay {
         let mut draws = self.aim(mouse.x, mouse.y, dt, scale);
         draws.extend(self.particles.iter().map(|p| Draw::Particle(*p)));
 
-        canvas(
+        let painting = canvas(
             |_, _, _| {},
             move |_, _, window, _| {
                 for draw in draws {
@@ -387,15 +427,59 @@ impl Render for Overlay {
                             }
                         }
                         Draw::Hand(bounds, image) => {
-                            let _ = window.paint_image(bounds, Corners::default(), image, 0, false);
+                            let _ = window.paint_image(bounds, bounds, Corners::default(), image, 0, false);
                         }
                         Draw::Particle(p) => paint_particle(&p, window),
                     }
                 }
             },
         )
-        .size_full()
+        .size_full();
+
+        div()
+            .size_full()
+            .on_mouse_down(MouseButton::Left, cx.listener(|this, e: &gpui::MouseDownEvent, _, _| {
+                if std::env::var_os("TH_DEBUG").is_some() {
+                    eprintln!("mouse down event at {:?}", e.position);
+                }
+                this.captured_down = true;
+                this.captured_press = true;
+            }))
+            .on_mouse_up(MouseButton::Left, cx.listener(|this, _, _, _| this.captured_down = false))
+            .child(painting)
     }
+}
+
+/// How the overlay window is made on this platform. `TH_INPUT=capture` uses the Linux way
+/// (take the mouse) anywhere, to try it on a Mac.
+fn window_kind() -> (Input, WindowKind) {
+    if std::env::var("TH_INPUT").is_ok_and(|v| v == "capture") && !cfg!(target_os = "linux") {
+        return (Input::Capture, WindowKind::PopUp);
+    }
+    #[cfg(target_os = "linux")]
+    {
+        let wayland = std::env::var_os("WAYLAND_DISPLAY").is_some_and(|v| !v.is_empty());
+        if wayland {
+            use gpui::layer_shell::{Anchor, KeyboardInteractivity, Layer, LayerShellOptions};
+            // A layer-shell surface on the overlay layer, stretched over the whole output.
+            // It never takes the keyboard, so Ctrl+C in the terminal still works.
+            return (
+                Input::Capture,
+                WindowKind::LayerShell(LayerShellOptions {
+                    namespace: "tinyhand".into(),
+                    layer: Layer::Overlay,
+                    anchor: Anchor::TOP | Anchor::BOTTOM | Anchor::LEFT | Anchor::RIGHT,
+                    // -1: don't make room for panels, cover them too.
+                    exclusive_zone: Some(px(-1.0)),
+                    keyboard_interactivity: KeyboardInteractivity::None,
+                    ..Default::default()
+                }),
+            );
+        }
+        return (Input::Capture, WindowKind::PopUp);
+    }
+    #[allow(unreachable_code)]
+    (Input::Watch, WindowKind::PopUp)
 }
 
 fn main() {
@@ -411,33 +495,36 @@ fn main() {
         }
     };
 
-    Application::new().run(move |cx: &mut App| {
+    gpui_platform::application().run(move |cx: &mut App| {
         native::hide_from_dock();
-        let Some(display) = cx.primary_display() else {
-            eprintln!("no display");
-            cx.quit();
-            return;
-        };
-        let bounds = display.bounds();
+        // Wayland may not list displays before the first window exists; the overlay
+        // takes its real size from the window once it is drawn.
+        let display = cx.primary_display();
+        let bounds = display.as_ref().map(|d| d.bounds()).unwrap_or_else(|| {
+            Bounds::new(point(px(0.0), px(0.0)), size(px(1920.0), px(1080.0)))
+        });
         let (width, height) = (f32::from(bounds.size.width), f32::from(bounds.size.height));
+        let (input, kind) = window_kind();
         let options = WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(bounds)),
-            display_id: Some(display.id()),
+            display_id: display.as_ref().map(|d| d.id()),
             titlebar: None,
             window_background: WindowBackgroundAppearance::Transparent,
             focus: false,
             show: true,
-            kind: WindowKind::PopUp,
+            kind,
+            // The overlay never has focus; GPUI would otherwise hold it to ~30 fps.
+            inactive_frame_interval: None,
             is_movable: false,
             is_resizable: false,
             is_minimizable: false,
             ..Default::default()
         };
         let opened = cx.open_window(options, |window, cx| {
-            if let Err(e) = native::make_overlay(window) {
+            if let Err(e) = native::make_overlay(window, input == Input::Watch) {
                 eprintln!("overlay setup: {e}");
             }
-            cx.new(|_| Overlay::new(hand, width, height))
+            cx.new(|_| Overlay::new(input, hand, width, height))
         });
         if let Err(e) = opened {
             eprintln!("can't open the overlay: {e}");
