@@ -207,6 +207,81 @@ impl Controller {
         }
     }
 
+    // ---- For the settings, toolbar and welcome windows ----
+
+    /// Changes settings, saves them and applies what depends on them. Use this for every
+    /// change made from a window; shortcuts go through `set_shortcut` instead.
+    pub fn update_settings(&mut self, cx: &mut Context<Self>, change: impl FnOnce(&mut Settings)) {
+        let before_style = self.settings.pointer_style.clone();
+        let before_sound = self.settings.tap_sound;
+        change(&mut self.settings);
+        self.settings.normalise();
+        if self.settings.pointer_style != before_style {
+            let id = self.settings.pointer_style.clone();
+            self.scene.set_style(&id, &self.custom);
+            self.settings.pointer_style = self.scene.style.id.clone();
+        }
+        if self.settings.tap_sound != before_sound {
+            self.sounds.preload(self.settings.tap_sound.id());
+        }
+        if let Some(tap) = self.tap.as_ref() {
+            tap.set_interact_key(self.interact_modifier());
+        }
+        self.save_settings();
+        self.update_tray();
+        self.write_state();
+        self.wake(cx);
+        cx.notify();
+    }
+
+    /// Sets the toggle or clear shortcut. On failure (taken by another app, or not
+    /// valid) the old shortcut stays registered and the error says why.
+    pub fn set_shortcut(&mut self, id: HotkeyId, shortcut: tinyhand_core::settings::Shortcut, cx: &mut Context<Self>) -> Result<(), String> {
+        let old = match id {
+            HotkeyId::Toggle => self.settings.toggle_shortcut.clone(),
+            HotkeyId::Clear => self.settings.clear_shortcut.clone(),
+            HotkeyId::Escape => return Err("Esc can't be changed".into()),
+        };
+        if let Some(keys) = self.hotkeys.as_mut() {
+            keys.unregister(id);
+            if let Err(e) = keys.register(id, &shortcut.to_string()) {
+                let _ = keys.register(id, &old.to_string());
+                return Err(e.to_string());
+            }
+        }
+        self.update_settings(cx, |s| match id {
+            HotkeyId::Toggle => s.toggle_shortcut = shortcut,
+            _ => s.clear_shortcut = shortcut,
+        });
+        Ok(())
+    }
+
+    /// While a shortcut recorder is listening, the global shortcuts must not fire.
+    pub fn suspend_hotkeys(&mut self, suspended: bool) {
+        let Some(keys) = self.hotkeys.as_mut() else { return };
+        if suspended {
+            keys.unregister(HotkeyId::Toggle);
+            keys.unregister(HotkeyId::Clear);
+        } else {
+            for (id, s) in [(HotkeyId::Toggle, self.settings.toggle_shortcut.to_string()), (HotkeyId::Clear, self.settings.clear_shortcut.to_string())] {
+                if let Err(e) = keys.register(id, &s) {
+                    log(&format!("shortcut {s}: {e}"));
+                }
+            }
+        }
+    }
+
+    /// After custom hands were added, renamed or deleted.
+    pub fn reload_custom_hands(&mut self, cx: &mut Context<Self>) {
+        self.custom = CustomHands::load_default();
+        self.update_settings(cx, |_| {});
+    }
+
+    /// Plays the chosen tap sound once (sound page preview).
+    pub fn preview_sound(&self, id: &str) {
+        self.sounds.play(id);
+    }
+
     pub fn sound_on(&self) -> bool {
         if self.scene.style.kind == StyleKind::Laser { self.settings.laser_sound } else { self.settings.hand_sound }
     }

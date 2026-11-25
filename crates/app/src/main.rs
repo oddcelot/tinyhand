@@ -22,6 +22,7 @@ mod controller;
 mod instance;
 mod overlay;
 mod paint;
+mod settings_window;
 mod shift;
 mod tray_menu;
 
