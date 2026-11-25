@@ -120,7 +120,7 @@ enum Preferences {
     }
 
     static var tapEffect: TapEffectChoice {
-        get { defaults.string(forKey: "tapEffect").flatMap(TapEffectChoice.init(rawValue:)) ?? .off }
+        get { defaults.string(forKey: "tapEffect").flatMap(TapEffectChoice.init(rawValue:)) ?? .fairyDust }
         set { set(newValue.rawValue, "tapEffect") }
     }
 
