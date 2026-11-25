@@ -4792,6 +4792,7 @@ dependencies = [
  "image",
  "objc",
  "raw-window-handle",
+ "wayland-client",
  "windows-sys 0.59.0",
  "x11rb",
 ]

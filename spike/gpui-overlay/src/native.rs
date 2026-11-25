@@ -176,6 +176,31 @@ mod imp {
     pub fn mouse(_display_height: f32, _scale: f32) -> Mouse {
         Mouse { x: 0.0, y: 0.0, down: false }
     }
+
+    /// Whether the Wayland compositor offers `zwlr_layer_shell_v1`; `None` if it can't be
+    /// reached. GNOME doesn't offer it.
+    pub fn wayland_has_layer_shell() -> Option<bool> {
+        use wayland_client::protocol::wl_registry;
+        use wayland_client::{Connection, Dispatch, QueueHandle};
+
+        struct Globals(bool);
+        impl Dispatch<wl_registry::WlRegistry, ()> for Globals {
+            fn event(state: &mut Self, _: &wl_registry::WlRegistry, event: wl_registry::Event, _: &(), _: &Connection, _: &QueueHandle<Self>) {
+                if let wl_registry::Event::Global { interface, .. } = event {
+                    if interface == "zwlr_layer_shell_v1" {
+                        state.0 = true;
+                    }
+                }
+            }
+        }
+
+        let conn = Connection::connect_to_env().ok()?;
+        let mut queue = conn.new_event_queue();
+        conn.display().get_registry(&queue.handle(), ());
+        let mut globals = Globals(false);
+        queue.roundtrip(&mut globals).ok()?;
+        Some(globals.0)
+    }
 }
 
 #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]

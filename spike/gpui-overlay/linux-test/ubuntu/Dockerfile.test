@@ -1,0 +1,8 @@
+# Clean Ubuntu 24.04 x86-64 with only test tooling. The app comes from the .deb at run time.
+FROM ubuntu:24.04
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    sway grim foot xvfb xcompmgr xdotool xterm imagemagick x11-utils x11-xserver-utils \
+    mesa-vulkan-drivers libgl1-mesa-dri mutter xwayland dbus dbus-x11 procps fonts-dejavu-core \
+ && rm -rf /var/lib/apt/lists/*
+ENV XDG_RUNTIME_DIR=/tmp/xdg

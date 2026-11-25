@@ -2,6 +2,7 @@
 //!
 //!     move <x> <y>     absolute position in output pixels
 //!     click            left button down and up
+//!     rclick           right button down and up
 //!
 //! `wlrctl` creates a virtual pointer per command and removes it right after, so the
 //! seat's pointer comes and goes before a client can bind it. This one stays until stdin
@@ -40,6 +41,7 @@ delegate_noop!(State: ZwlrVirtualPointerManagerV1);
 delegate_noop!(State: ZwlrVirtualPointerV1);
 
 const BTN_LEFT: u32 = 0x110;
+const BTN_RIGHT: u32 = 0x111;
 
 fn main() {
     let width: u32 = std::env::var("W").ok().and_then(|v| v.parse().ok()).unwrap_or(1920);
@@ -65,12 +67,13 @@ fn main() {
                 pointer.motion_absolute(now(), x.parse().unwrap(), y.parse().unwrap(), width, height);
                 pointer.frame();
             }
-            ["click"] => {
-                pointer.button(now(), BTN_LEFT, wayland_client::protocol::wl_pointer::ButtonState::Pressed);
+            ["click"] | ["rclick"] => {
+                let button = if parts[0] == "click" { BTN_LEFT } else { BTN_RIGHT };
+                pointer.button(now(), button, wayland_client::protocol::wl_pointer::ButtonState::Pressed);
                 pointer.frame();
                 conn.flush().unwrap();
                 std::thread::sleep(Duration::from_millis(60));
-                pointer.button(now(), BTN_LEFT, wayland_client::protocol::wl_pointer::ButtonState::Released);
+                pointer.button(now(), button, wayland_client::protocol::wl_pointer::ButtonState::Released);
                 pointer.frame();
             }
             _ => eprintln!("vpointer: unknown command {line:?}"),

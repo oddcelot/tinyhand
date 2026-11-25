@@ -40,6 +40,7 @@ CONF
   exec 3>/tmp/vpointer.fifo
   move()  { echo "move $1 $2" >&3; }
   click() { echo click >&3; }
+  rclick() { echo rclick >&3; }
   shot()  { grim "$1"; }
 else
   export DISPLAY=${DISPLAY:-:99}; unset WAYLAND_DISPLAY
@@ -51,6 +52,7 @@ else
   BG_CLIENT=${BG_CLIENT:-xterm -geometry 120x40+500+300 -e $BG_TEXT_CMD}
   move()  { xdotool mousemove "$1" "$2"; }
   click() { xdotool click 1; }
+  rclick() { xdotool click 3; }
   shot()  { import -window root "$1"; }
 fi
 
@@ -69,6 +71,12 @@ shot "$OUT/$MODE-1.png"; sleep "$T_SHOT"
 shot "$OUT/$MODE-2.png"
 move "$X2" "$Y2"
 shot "$OUT/$MODE-3.png"
+
+# Right-click should quit the app (it takes every click, so that's the way out).
+if [ "$APP" != none ]; then
+  rclick; sleep 1
+  if pgrep -f "$APP" >/dev/null; then echo "RIGHT-CLICK QUIT: no, app still running"; else echo "RIGHT-CLICK QUIT: yes"; fi
+fi
 
 cleanup; trap - EXIT
 echo "--- app output ($LOG) ---"; cat "$LOG" 2>/dev/null

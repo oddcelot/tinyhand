@@ -13,7 +13,8 @@
 //! Run from this folder:
 //!     cargo run --release                     # Butterfly 3D
 //!     cargo run --release -- lavender         # any hand in ../../assets
-//! Quit with Ctrl+C in the terminal.
+//! Quit with Ctrl+C in the terminal. On Linux, where the overlay takes the mouse,
+//! right-click or Esc quits too.
 //!
 //! For unattended checks: TH_FAKE_MOUSE=x,y pins the pointer, TH_TAP_EVERY=seconds taps
 //! on a timer, TH_SECONDS=n quits after n seconds.
@@ -24,7 +25,8 @@ mod native;
 use std::time::{Duration, Instant};
 
 use gpui::{
-    App, BorderStyle, Bounds, Context, Corners, Edges, Hsla, MouseButton, PathBuilder, Pixels,
+    App, BorderStyle, Bounds, Context, Corners, Edges, FocusHandle, Hsla, KeyDownEvent,
+    MouseButton, PathBuilder, Pixels,
     Point, Rgba, Window, WindowBackgroundAppearance, WindowBounds, WindowKind, WindowOptions,
     canvas, div, linear_color_stop, linear_gradient, point, prelude::*, px, quad, size,
 };
@@ -116,6 +118,7 @@ impl Random {
 
 struct Overlay {
     input: Input,
+    focus: FocusHandle,
     /// Left button, as GPUI reports it in `Input::Capture`.
     captured_down: bool,
     /// Set by a press and cleared by the next frame, so a click that goes down and up
@@ -146,7 +149,7 @@ enum Draw {
 }
 
 impl Overlay {
-    fn new(input: Input, hand: Hand, width: f32, height: f32) -> Self {
+    fn new(input: Input, focus: FocusHandle, hand: Hand, width: f32, height: f32) -> Self {
         let env = |key: &str| std::env::var(key).ok();
         let fake_mouse = env("TH_FAKE_MOUSE").and_then(|v| {
             let (x, y) = v.split_once(',')?;
@@ -155,6 +158,7 @@ impl Overlay {
         let seed = Instant::now().elapsed().as_nanos() as u64 ^ 0x9E37_79B9_7F4A_7C15;
         Overlay {
             input,
+            focus,
             captured_down: false,
             captured_press: false,
             hand,
@@ -436,33 +440,70 @@ impl Render for Overlay {
         )
         .size_full();
 
+        // Only reached in capture mode: in watch mode the window never gets the mouse.
         div()
             .size_full()
-            .on_mouse_down(MouseButton::Left, cx.listener(|this, e: &gpui::MouseDownEvent, _, _| {
+            .track_focus(&self.focus)
+            .on_mouse_down(MouseButton::Left, cx.listener(|this, e: &gpui::MouseDownEvent, window, cx| {
                 if std::env::var_os("TH_DEBUG").is_some() {
                     eprintln!("mouse down event at {:?}", e.position);
                 }
                 this.captured_down = true;
                 this.captured_press = true;
+                // So Esc reaches the overlay where the system allows it.
+                window.focus(&this.focus, cx);
             }))
             .on_mouse_up(MouseButton::Left, cx.listener(|this, _, _, _| this.captured_down = false))
+            // The overlay takes every click, so there has to be a way out without a terminal.
+            .on_mouse_down(MouseButton::Right, |_, _, cx| cx.quit())
+            .on_key_down(|e: &KeyDownEvent, _, cx| {
+                if e.keystroke.key == "escape" {
+                    cx.quit();
+                }
+            })
             .child(painting)
+    }
+}
+
+/// Which Linux display server to use.
+#[cfg(target_os = "linux")]
+#[derive(Clone, Copy, PartialEq)]
+enum Linux {
+    /// A Wayland compositor with layer shell (KDE, Hyprland, Sway, ...).
+    LayerShell,
+    /// X11, or XWayland on a Wayland compositor without layer shell (GNOME, so stock
+    /// Ubuntu). Every GNOME session runs XWayland.
+    X11,
+}
+
+#[cfg(target_os = "linux")]
+fn pick_linux() -> Linux {
+    let wayland = std::env::var_os("WAYLAND_DISPLAY").is_some_and(|v| !v.is_empty());
+    if !wayland || std::env::var("TH_BACKEND").is_ok_and(|v| v == "x11") {
+        return Linux::X11;
+    }
+    match native::wayland_has_layer_shell() {
+        Some(true) => Linux::LayerShell,
+        Some(false) => {
+            eprintln!("this Wayland compositor has no layer shell; using XWayland instead");
+            Linux::X11
+        }
+        None => Linux::X11,
     }
 }
 
 /// How the overlay window is made on this platform. `TH_INPUT=capture` uses the Linux way
 /// (take the mouse) anywhere, to try it on a Mac.
-fn window_kind() -> (Input, WindowKind) {
+fn window_kind(#[cfg(target_os = "linux")] linux: Linux) -> (Input, WindowKind) {
     if std::env::var("TH_INPUT").is_ok_and(|v| v == "capture") && !cfg!(target_os = "linux") {
         return (Input::Capture, WindowKind::PopUp);
     }
     #[cfg(target_os = "linux")]
     {
-        let wayland = std::env::var_os("WAYLAND_DISPLAY").is_some_and(|v| !v.is_empty());
-        if wayland {
+        if linux == Linux::LayerShell {
             use gpui::layer_shell::{Anchor, KeyboardInteractivity, Layer, LayerShellOptions};
             // A layer-shell surface on the overlay layer, stretched over the whole output.
-            // It never takes the keyboard, so Ctrl+C in the terminal still works.
+            // It takes the keyboard only once clicked, for Esc.
             return (
                 Input::Capture,
                 WindowKind::LayerShell(LayerShellOptions {
@@ -471,7 +512,7 @@ fn window_kind() -> (Input, WindowKind) {
                     anchor: Anchor::TOP | Anchor::BOTTOM | Anchor::LEFT | Anchor::RIGHT,
                     // -1: don't make room for panels, cover them too.
                     exclusive_zone: Some(px(-1.0)),
-                    keyboard_interactivity: KeyboardInteractivity::None,
+                    keyboard_interactivity: KeyboardInteractivity::OnDemand,
                     ..Default::default()
                 }),
             );
@@ -482,11 +523,30 @@ fn window_kind() -> (Input, WindowKind) {
     (Input::Watch, WindowKind::PopUp)
 }
 
+/// Where the hand images are: `TH_HANDS_DIR`, next to an installed binary
+/// (`../share/tinyhand/hands`, as the .deb lays it out), or the repo's assets folder.
+fn hand_path(name: &str) -> std::path::PathBuf {
+    let file = format!("hand_{name}.png");
+    let mut dirs: Vec<std::path::PathBuf> = Vec::new();
+    if let Some(dir) = std::env::var_os("TH_HANDS_DIR") {
+        dirs.push(dir.into());
+    }
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(bin) = exe.parent() {
+            dirs.push(bin.join("../share/tinyhand/hands"));
+        }
+    }
+    dirs.push("/usr/share/tinyhand/hands".into());
+    dirs.push(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets"));
+    dirs.iter()
+        .map(|d| d.join(&file))
+        .find(|p| p.exists())
+        .unwrap_or_else(|| dirs.last().unwrap().join(&file))
+}
+
 fn main() {
     let name = std::env::args().nth(1).unwrap_or_else(|| "butterfly3d".into());
-    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../assets")
-        .join(format!("hand_{name}.png"));
+    let path = hand_path(&name);
     let hand = match Hand::load(&path) {
         Ok(hand) => hand,
         Err(e) => {
@@ -495,7 +555,17 @@ fn main() {
         }
     };
 
-    gpui_platform::application().run(move |cx: &mut App| {
+    #[cfg(target_os = "linux")]
+    let linux = pick_linux();
+    #[cfg(target_os = "linux")]
+    let app = match linux {
+        Linux::LayerShell => gpui_platform::linux(gpui::WindowingModes::WAYLAND),
+        Linux::X11 => gpui_platform::linux(gpui::WindowingModes::X11),
+    };
+    #[cfg(not(target_os = "linux"))]
+    let app = gpui_platform::application();
+
+    app.run(move |cx: &mut App| {
         native::hide_from_dock();
         // Wayland may not list displays before the first window exists; the overlay
         // takes its real size from the window once it is drawn.
@@ -504,7 +574,10 @@ fn main() {
             Bounds::new(point(px(0.0), px(0.0)), size(px(1920.0), px(1080.0)))
         });
         let (width, height) = (f32::from(bounds.size.width), f32::from(bounds.size.height));
-        let (input, kind) = window_kind();
+        let (input, kind) = window_kind(
+            #[cfg(target_os = "linux")]
+            linux,
+        );
         let options = WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(bounds)),
             display_id: display.as_ref().map(|d| d.id()),
@@ -524,7 +597,8 @@ fn main() {
             if let Err(e) = native::make_overlay(window, input == Input::Watch) {
                 eprintln!("overlay setup: {e}");
             }
-            cx.new(|_| Overlay::new(input, hand, width, height))
+            let focus = cx.focus_handle();
+            cx.new(|_| Overlay::new(input, focus, hand, width, height))
         });
         if let Err(e) = opened {
             eprintln!("can't open the overlay: {e}");
