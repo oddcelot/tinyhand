@@ -56,8 +56,14 @@ impl Hand {
         let search_end = h.min(top + (0.45 * h as f32) as usize);
         let max_w = *counts[top..search_end].iter().max().unwrap_or(&0);
         let fist = (top..h).find(|&y| counts[y] as f32 > 0.6 * max_w as f32).ok_or("no hand found")?;
-        let wrist = (fist..h).find(|&y| (counts[y] as f32) < 0.35 * max_w as f32).ok_or("no wrist found")?;
+        let narrowing = (fist..h).find(|&y| (counts[y] as f32) < 0.35 * max_w as f32).ok_or("no wrist found")?;
         let last_row = counts.iter().rposition(|&n| n > 0).unwrap_or(h - 1);
+        let mut below: Vec<usize> = counts[narrowing..=last_row].to_vec();
+        below.sort_unstable();
+        let stick_w = below[below.len() / 2];
+        let wrist = (narrowing..=last_row)
+            .find(|&y| counts[y] as f32 <= 1.25 * stick_w as f32)
+            .unwrap_or(narrowing);
         let rod_row = (wrist + h / 50).min(h - 1);
         let from = (wrist + h / 33).min(h - 1);
         let rod_end = (from..h).find(|&y| counts[y] as f32 > 1.8 * counts[rod_row] as f32).unwrap_or(last_row);

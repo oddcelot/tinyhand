@@ -41,7 +41,7 @@ fn fingertip_lands_on_cursor() {
 }
 
 fn fingertip_lands_on_cursor_at(size: f32) {
-    let mut hand = Hand::load(&assets().join("hand_lavender.png")).unwrap();
+    let mut hand = Hand::load(&assets().join("hand_butterfly3d.png")).unwrap();
     hand.fit(Arm::hand_pixels(900.0, 2.0, size));
     let mut arm = Arm::with_size(size);
     for &(x, y) in &[(700.0, 450.0), (100.0, 80.0), (1300.0, 850.0), (720.0, 20.0)] {

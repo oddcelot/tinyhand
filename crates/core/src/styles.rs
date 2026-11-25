@@ -11,8 +11,9 @@ pub const INK_RED: u32 = 0xFF291F;
 pub const MAX_PINNED: usize = 8;
 pub const LASER: &str = "laser";
 /// The style used when nothing valid is saved.
-pub const DEFAULT_STYLE: &str = "lavender";
-pub const DEFAULT_PINNED: [&str; 6] = [
+pub const DEFAULT_STYLE: &str = "butterfly3d";
+pub const DEFAULT_PINNED: [&str; 7] = [
+    "butterfly3d",
     "lavender",
     "glove",
     "coral",
@@ -49,7 +50,7 @@ pub struct Style {
 }
 
 /// (id, title, ink) in catalogue order.
-pub const BUILT_IN: [(&str, &str, u32); 36] = [
+pub const BUILT_IN: [(&str, &str, u32); 39] = [
     ("lavender", "Lavender toy", INK_PURPLE),
     ("glove", "Cursor glove", INK_PURPLE),
     ("coral", "Coral vinyl", INK_RED),
@@ -86,6 +87,9 @@ pub const BUILT_IN: [(&str, &str, u32); 36] = [
     ("neon", "Neon", 0xE0309A),
     ("leaf", "Leaf", 0x3E9E2E),
     ("cookie", "Gingerbread", 0x9A5E2C),
+    ("pentacode", "Pentacode", 0x0CA8D1),
+    ("butterfly", "Butterfly", 0x1991C7),
+    ("butterfly3d", "Butterfly 3D", 0x1991C7),
 ];
 
 fn laser() -> Style {

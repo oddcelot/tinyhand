@@ -551,6 +551,7 @@ impl Controller {
         self.interact_pressing = false;
         self.scene.release();
         self.scene.ink.clear();
+        self.scene.particles.clear();
         self.close_window(cx);
         self.toolbar_deactivated(cx);
         self.menu_rects.clear();
@@ -701,11 +702,11 @@ impl Controller {
         }
     }
 
-    /// A swallowed press (`inputTap.onMouseDown`): press the hand, play the sound, and
+    /// A swallowed press (`inputTap.onMouseDown`): press the hand, sound, dust, and
     /// remember where a drag would start.
     pub fn press(&mut self, at: (f32, f32)) {
         self.toolbar.hide_hint();
-        self.scene.press(at);
+        self.scene.press(at, self.settings.tap_effect, self.settings.pointer_size);
         self.play_tap_sound();
     }
 
@@ -817,6 +818,7 @@ impl Controller {
         self.toolbar.reveal_until = Some(Instant::now() + Duration::from_millis(1500));
         self.scene.release();
         self.scene.ink.clear();
+        self.scene.particles.clear();
         let this = cx.entity();
         cx.defer(move |cx| {
             this.update(cx, |c, cx| {

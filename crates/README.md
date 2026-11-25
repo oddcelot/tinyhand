@@ -5,7 +5,7 @@ the original Swift app (macOS only); `crates/docs/swift-reference.md` records wh
 
 | Crate | What's in it |
 |---|---|
-| `core` (`tinyhand-core`) | No UI or OS code: measuring hand images, rotating them, the arm geometry, ink, settings. Unit-tested. |
+| `core` (`tinyhand-core`) | No UI or OS code: measuring hand images, rotating them, the arm geometry, fairy dust. Unit-tested. |
 | `platform` (`tinyhand-platform`) | Per-OS code: making the overlay window float and ignore clicks, reading the mouse. |
 | `app` (`tinyhand`) | The GPUI app: windows and drawing. |
 
@@ -115,7 +115,7 @@ double-⇧), hide the system cursor (GPUI has no hidden cursor style), more than
 
 ## What it showed
 
-**macOS works.** Hand and stick follow the mouse with the geometry of
+**macOS works.** Hand, stick and dust follow the mouse with the geometry of
 `ArmView.swift`; the window is transparent, ignores clicks, sits above other apps and on
 every Space. About 5–6% CPU and 80 MB.
 
@@ -132,7 +132,8 @@ a Mac. Open question: does GPUI's DirectComposition window still draw once it is
 
 **Linux works, in a headless rig.** Under Sway (Wayland, layer shell) and Xvfb with
 xcompmgr (X11), both in Docker on software rendering, the overlay draws transparently
-over other apps, the fingertip follows the pointer, and a click lands on the overlay. See `tests/linux/`. Not tried on a real desktop yet, nor on KDE,
+over other apps, the fingertip follows the pointer, and a click lands on the overlay and
+throws the dust. See `tests/linux/`. Not tried on a real desktop yet, nor on KDE,
 Hyprland or a real X11 window manager.
 
 Two things the Linux run turned up:

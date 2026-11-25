@@ -8,7 +8,7 @@ release on every platform.
 
 | Swift | Rust |
 |---|---|
-| ArmView geometry, HandAsset.measure | `core`: `arm`, `hand` (done) |
+| ArmView geometry, HandAsset.measure, TapEffect particles | `core`: `arm`, `hand`, `particles` (done) |
 | Preferences (UserDefaults) | `core::settings`: a JSON file in the config folder |
 | PointerStyle catalogue, custom hands (`hands.json`) | `core::styles`, `core::custom_hands` |
 | Ink strokes, arrowheads, fading | `core::ink` (model) + drawing in `app` |
@@ -47,7 +47,7 @@ key binding) are the way to turn it on.
 1. **Workspace** (done): `core`, `platform`, `app` crates; logic tests; Linux rigs moved.
 2. **Logic and OS pieces** (done): settings, styles and custom hands, ink model, hand
    maker in `core`; input tap, hotkeys, cursor, sound, login, tray in `platform`.
-3. **App** (done): overlay with ink, laser dot, shadow from settings; tray
+3. **App** (done): overlay with ink, laser dot, shadow and tap effect from settings; tray
    menu; hotkeys; Esc; double-⇧ click-through; ⌥ pass-through; automatic off on lock and
    sleep.
 4. **Windows** (done): toolbar and ink tray; welcome card; settings window with every

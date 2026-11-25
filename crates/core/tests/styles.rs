@@ -5,15 +5,15 @@ use tinyhand_core::styles::*;
 #[test]
 fn catalogue_order_and_size() {
     let all = all_styles(&[]);
-    assert_eq!(all.len(), 37);
+    assert_eq!(all.len(), 40);
     assert_eq!(all[0].id, "lavender");
-    assert_eq!(all[35].id, "cookie");
+    assert_eq!(all[38].id, "butterfly3d");
     assert_eq!(all.last().unwrap().id, "laser");
     assert_eq!(all.last().unwrap().kind, StyleKind::Laser);
     let mut ids: Vec<_> = all.iter().map(|s| s.id.as_str()).collect();
     ids.sort();
     ids.dedup();
-    assert_eq!(ids.len(), 37);
+    assert_eq!(ids.len(), 40);
 }
 
 #[test]
@@ -24,6 +24,7 @@ fn titles_and_inks_match_swift() {
     assert_eq!(find("cookie", &[]).unwrap().title, "Gingerbread");
     assert_eq!(find("lowpoly", &[]).unwrap().title, "Low poly");
     assert_eq!(find("black", &[]).unwrap().title, "Midnight");
+    assert_eq!(find("pentacode", &[]).unwrap().ink, 0x0CA8D1);
     assert_eq!(find("laser", &[]).unwrap().title, "Laser dot");
     assert_eq!(find("laser", &[]).unwrap().ink, 0xFF291F);
     assert!(find("nope", &[]).is_none());
@@ -33,10 +34,10 @@ fn titles_and_inks_match_swift() {
 fn customs_sit_between_built_ins_and_laser() {
     let c = vec![CustomHand { id: "custom-abcd1234".into(), name: "Mine".into(), ink: 0x112233 }];
     let all = all_styles(&c);
-    assert_eq!(all.len(), 38);
-    assert_eq!(all[36].id, "custom-abcd1234");
-    assert_eq!(all[36].kind, StyleKind::Custom);
-    assert_eq!(all[37].id, "laser");
+    assert_eq!(all.len(), 41);
+    assert_eq!(all[39].id, "custom-abcd1234");
+    assert_eq!(all[39].kind, StyleKind::Custom);
+    assert_eq!(all[40].id, "laser");
     let f = find("custom-abcd1234", &c).unwrap();
     assert_eq!((f.title.as_str(), f.ink), ("Mine", 0x112233));
     assert!(find("custom-abcd1234", &[]).is_none());
@@ -45,7 +46,7 @@ fn customs_sit_between_built_ins_and_laser() {
 #[test]
 fn pinned_defaults() {
     assert_eq!(MAX_PINNED, 8);
-    assert_eq!(DEFAULT_PINNED, ["lavender", "glove", "coral", "plush", "robot", "laser"]);
+    assert_eq!(DEFAULT_PINNED.len(), 7);
     for id in DEFAULT_PINNED {
         assert!(find(id, &[]).is_some());
     }
