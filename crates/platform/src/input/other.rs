@@ -37,3 +37,7 @@ pub fn input_counter() -> u64 {
 pub fn left_button_down() -> bool {
     false
 }
+
+pub fn screen_locked() -> bool {
+    false
+}

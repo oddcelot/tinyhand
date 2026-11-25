@@ -4,6 +4,7 @@
 
 use crate::hand::Hand;
 
+/// The default hand length (Swift `pointerSize`), as a fraction of the screen height.
 pub const HAND_LEN_FRAC: f32 = 0.13;
 pub const MIN_ROD_FRAC: f32 = 0.05;
 pub const GRIP_LEAN_FRAC: f32 = 0.30;
@@ -32,20 +33,50 @@ pub struct ArmPose {
 /// The arm's state between frames.
 pub struct Arm {
     grip_x: Option<f32>,
+    grip_target: Option<f32>,
     /// 1 right after a press, easing back to 0.
     pub press: f32,
+    /// Hand length as a fraction of the screen height (the `pointerSize` setting).
+    pub size: f32,
 }
 
 impl Default for Arm {
     fn default() -> Self {
-        Arm { grip_x: None, press: 0.0 }
+        Arm::with_size(HAND_LEN_FRAC)
     }
 }
 
 impl Arm {
-    /// Height in device pixels the hand is drawn at for a screen this tall.
-    pub fn hand_pixels(screen_height: f32, scale: f32) -> u32 {
-        (HAND_LEN_FRAC * screen_height * scale).round() as u32
+    /// An arm whose hand is `size` of the screen height long (`pointerSize`, 0.08–0.20).
+    pub fn with_size(size: f32) -> Self {
+        Arm { grip_x: None, grip_target: None, press: 0.0, size }
+    }
+
+    /// Height in device pixels a hand `size` of the screen height long is drawn at.
+    pub fn hand_pixels(screen_height: f32, scale: f32, size: f32) -> u32 {
+        (size * screen_height * scale).round() as u32
+    }
+
+    /// Still moving after the pointer stopped: a press springing back or the grip catching
+    /// up (`ArmView.isSettling`).
+    pub fn is_settling(&self) -> bool {
+        if self.press > 0.002 {
+            return true;
+        }
+        match (self.grip_x, self.grip_target) {
+            (Some(g), Some(t)) => (t - g).abs() > 0.5,
+            _ => false,
+        }
+    }
+
+    /// Moves the grip towards the pointer without working out a pose, for styles without
+    /// an arm (the laser dot), so switching back doesn't jump.
+    pub fn follow(&mut self, cursor_x: f32, screen_width: f32, dt: f32) {
+        let w = screen_width;
+        let target_x = (cursor_x + GRIP_LEAN_FRAC * w).clamp(w * 0.15, w * 1.05);
+        let follow = 1.0 - (1.0 - GRIP_FOLLOW).powf(dt * 120.0);
+        self.grip_x = Some(self.grip_x.map_or(target_x, |g| g + (target_x - g) * follow));
+        self.grip_target = Some(target_x);
     }
 
     pub fn press_now(&mut self) {
@@ -61,16 +92,14 @@ impl Arm {
         let (w, h) = screen;
         // Same maths as the Swift view, which has y pointing up.
         let cursor = (cursor.0, h - cursor.1);
-        let target_x = (cursor.0 + GRIP_LEAN_FRAC * w).clamp(w * 0.15, w * 1.05);
-        let follow = 1.0 - (1.0 - GRIP_FOLLOW).powf(dt * 120.0);
-        let gx = self.grip_x.map_or(target_x, |g| g + (target_x - g) * follow);
-        self.grip_x = Some(gx);
+        self.follow(cursor.0, w, dt);
+        let gx = self.grip_x.unwrap_or(0.0);
         let grip = (gx, -GRIP_DEPTH_FRAC * h);
 
         let (dx, dy) = (cursor.0 - grip.0, cursor.1 - grip.1);
         let reach = dx.hypot(dy);
         let aim_angle = dy.atan2(dx);
-        let hand_pts = HAND_LEN_FRAC * h * (1.0 - 0.06 * self.press);
+        let hand_pts = self.size * h * (1.0 - 0.06 * self.press);
         let s = hand_pts / (hand.wrist - hand.hand_top);
         let width_pts = s * hand.aspect;
         let hand_tip_pts = (hand.wrist - hand.tip) * s;

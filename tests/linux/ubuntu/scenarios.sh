@@ -5,6 +5,8 @@ OUT=/out; W=1920; H=1080
 mkdir -p /tmp/.X11-unix; chmod 1777 /tmp/.X11-unix   # a real distro creates this at boot
 mkdir -p "$XDG_RUNTIME_DIR" $OUT; chmod 700 "$XDG_RUNTIME_DIR"
 export TH_SECONDS=${TH_SECONDS:-12} TH_DEBUG=1
+# The app starts with the pointer off (a tray app); turn it on at launch, with throwaway settings.
+export TH_ACTIVATE=1 TH_CONFIG_DIR=$(mktemp -d)
 BG_TEXT=(sh -c 'seq 1 200; sleep 60')
 PIDS=(); cleanup() { for p in "${PIDS[@]}"; do kill "$p" 2>/dev/null; done; wait 2>/dev/null; PIDS=(); rm -f $XDG_RUNTIME_DIR/wayland-*; }
 

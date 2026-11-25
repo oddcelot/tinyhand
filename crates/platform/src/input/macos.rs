@@ -278,7 +278,7 @@ fn handle(ctx: &Ctx, kind: u32, event: CGEventRef) -> CGEventRef {
 }
 
 /// Backstop for lock paths that don't post `com.apple.screenIsLocked`.
-fn screen_locked() -> bool {
+pub fn screen_locked() -> bool {
     // SAFETY: a Copy function; null when there is no session.
     let dict = unsafe { CGSessionCopyCurrentDictionary() };
     if dict.is_null() {

@@ -60,6 +60,9 @@ fi
 eval "$BG_CLIENT" >/dev/null 2>&1 & PIDS+=($!)
 sleep 1
 export TH_SECONDS=${TH_SECONDS:-10} TH_DEBUG=${TH_DEBUG:-1}   # app quits by itself, logs per frame
+# The app starts with the pointer off (a tray app); TH_ACTIVATE turns it on at launch.
+# Its settings go to a throwaway folder.
+export TH_ACTIVATE=1 TH_CONFIG_DIR=${TH_CONFIG_DIR:-$(mktemp -d)}
 if [ "$APP" != none ]; then
   "$APP" "$@" >"$LOG" 2>&1 & PIDS+=($!)
 fi
@@ -72,10 +75,11 @@ shot "$OUT/$MODE-2.png"
 move "$X2" "$Y2"
 shot "$OUT/$MODE-3.png"
 
-# Right-click should quit the app (it takes every click, so that's the way out).
+# Right-click should turn the pointer off (it takes every click, so that's the way out).
 if [ "$APP" != none ]; then
   rclick; sleep 1
-  if pgrep -f "$APP" >/dev/null; then echo "RIGHT-CLICK QUIT: no, app still running"; else echo "RIGHT-CLICK QUIT: yes"; fi
+  if grep -q "pointer off" "$LOG"; then echo "RIGHT-CLICK OFF: yes"; else echo "RIGHT-CLICK OFF: no"; fi
+  shot "$OUT/$MODE-4-off.png"
 fi
 
 cleanup; trap - EXIT

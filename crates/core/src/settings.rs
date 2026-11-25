@@ -602,7 +602,12 @@ impl Settings {
 
 /// Where TinyHand keeps its files: `~/Library/Application Support/TinyHand` on macOS,
 /// `~/.config/tinyhand` on Linux, `%APPDATA%\TinyHand` on Windows.
+///
+/// `TH_CONFIG_DIR` overrides it, for tests that must not touch the real settings.
 pub fn config_dir() -> PathBuf {
+    if let Some(dir) = std::env::var_os("TH_CONFIG_DIR").filter(|d| !d.is_empty()) {
+        return PathBuf::from(dir);
+    }
     let base = dirs::config_dir().unwrap_or_else(|| PathBuf::from("."));
     base.join(if cfg!(target_os = "linux") { "tinyhand" } else { "TinyHand" })
 }

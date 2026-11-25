@@ -97,6 +97,8 @@ pub enum InputEvent {
     /// A press that passes through because the interact modifier is held or click-through
     /// is latched.
     InteractDown,
+    /// The release that ends an [`InputEvent::InteractDown`] press (it passes through too).
+    InteractUp,
     /// A press inside a pass-through rect, which passes through.
     PassThroughPress { x: f64, y: f64 },
     /// A press on a locked screen, which passes through. The app should turn off.
@@ -201,6 +203,12 @@ pub fn input_counter() -> u64 {
 /// Whether the left mouse button is down right now (Linux: always false).
 pub fn left_button_down() -> bool {
     imp::left_button_down()
+}
+
+/// Whether the session's screen is locked (macOS: `CGSSessionScreenIsLocked`; elsewhere
+/// always false). Cheap enough to poll about once a second.
+pub fn screen_locked() -> bool {
+    imp::screen_locked()
 }
 
 // ---- the state machine both taps share ----
@@ -326,6 +334,7 @@ impl Shared {
         if s.interact_press {
             if let Kind::Up(_) = kind {
                 s.interact_press = false;
+                event = Some(InputEvent::InteractUp);
             }
             return (Action::PassStripping(key), event);
         }
@@ -415,6 +424,7 @@ mod tests {
         assert_eq!(s.decide(Kind::Up(L), 0.0, 0.0, |_| false, || false), strip);
         assert_eq!(s.decide(Kind::Down(L), 0.0, 0.0, |_| false, || false), Action::Swallow);
         assert_eq!(log.lock().unwrap()[0], InputEvent::InteractDown);
+        assert_eq!(log.lock().unwrap()[1], InputEvent::InteractUp);
     }
 
     #[test]

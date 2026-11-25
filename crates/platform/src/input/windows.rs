@@ -277,3 +277,7 @@ pub fn left_button_down() -> bool {
         key_down(VK_LBUTTON)
     }
 }
+
+pub fn screen_locked() -> bool {
+    false
+}

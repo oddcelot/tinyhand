@@ -23,6 +23,17 @@ pub struct Mouse {
     pub down: bool,
 }
 
+/// A display in global points (y down, origin at the top left of the primary display).
+/// `id` is the same number GPUI uses for the display (`u64::from(DisplayId)`).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Display {
+    pub id: u64,
+    pub x: f64,
+    pub y: f64,
+    pub w: f64,
+    pub h: f64,
+}
+
 #[cfg(target_os = "macos")]
 mod imp {
     use super::*;
@@ -36,9 +47,67 @@ mod imp {
         y: f64,
     }
 
+    #[repr(C)]
+    #[derive(Clone, Copy)]
+    struct NSRect {
+        origin: NSPoint,
+        size: NSPoint,
+    }
+
+    #[repr(C)]
+    #[derive(Clone, Copy)]
+    struct CGPoint {
+        x: f64,
+        y: f64,
+    }
+
+    #[repr(C)]
+    #[derive(Clone, Copy)]
+    struct CGRect {
+        origin: CGPoint,
+        size: CGPoint,
+    }
+
     #[link(name = "CoreGraphics", kind = "framework")]
     unsafe extern "C" {
         fn CGEventSourceButtonState(state: i32, button: u32) -> bool;
+        fn CGEventCreate(source: *const std::ffi::c_void) -> *mut std::ffi::c_void;
+        fn CGEventGetLocation(event: *mut std::ffi::c_void) -> CGPoint;
+        fn CGGetDisplaysWithPoint(point: CGPoint, max: u32, displays: *mut u32, count: *mut u32) -> i32;
+        fn CGDisplayBounds(display: u32) -> CGRect;
+    }
+
+    #[link(name = "CoreFoundation", kind = "framework")]
+    unsafe extern "C" {
+        fn CFRelease(cf: *const std::ffi::c_void);
+    }
+
+    /// The pointer in global points (y down from the top of the primary display).
+    pub fn cursor_global() -> Option<(f64, f64)> {
+        // SAFETY: a null source gives a fresh event we own and release.
+        unsafe {
+            let event = CGEventCreate(std::ptr::null());
+            if event.is_null() {
+                return None;
+            }
+            let p = CGEventGetLocation(event);
+            CFRelease(event);
+            Some((p.x, p.y))
+        }
+    }
+
+    /// The display under a global point.
+    pub fn display_at(x: f64, y: f64) -> Option<Display> {
+        let mut id = 0u32;
+        let mut count = 0u32;
+        // SAFETY: room for one id, as `max` says.
+        let err = unsafe { CGGetDisplaysWithPoint(CGPoint { x, y }, 1, &mut id, &mut count) };
+        if err != 0 || count == 0 {
+            return None;
+        }
+        // SAFETY: plain query.
+        let b = unsafe { CGDisplayBounds(id) };
+        Some(Display { id: id as u64, x: b.origin.x, y: b.origin.y, w: b.size.x, h: b.size.y })
     }
 
     pub fn hide_from_dock() {
@@ -63,8 +132,32 @@ mod imp {
             let _: () = msg_send![ns_window, setLevel: 1002i64];
             // canJoinAllSpaces | stationary | ignoresCycle | fullScreenAuxiliary
             let _: () = msg_send![ns_window, setCollectionBehavior: (1u64 | 16 | 64 | 256)];
+            // GPUI makes titled windows (hidden title bar), and AppKit keeps titled windows
+            // below the menu bar. The overlay covers the whole screen, menu bar included:
+            // let this window class keep any frame, then set the frame again.
+            allow_any_frame(ns_window);
+            let screen: *mut Object = msg_send![ns_window, screen];
+            if !screen.is_null() {
+                let frame: NSRect = msg_send![screen, frame];
+                let _: () = msg_send![ns_window, setFrame: frame display: YES];
+            }
         }
         Ok(())
+    }
+
+    /// Overrides `constrainFrameRect:toScreen:` on the window's class (GPUI's panel
+    /// class, only used for our own windows) so AppKit stops moving it below the menu bar.
+    unsafe fn allow_any_frame(ns_window: *mut Object) {
+        extern "C" fn keep(_this: &Object, _cmd: objc::runtime::Sel, rect: NSRect, _screen: *mut Object) -> NSRect {
+            rect
+        }
+        unsafe {
+            let class = objc::runtime::object_getClass(ns_window) as *mut objc::runtime::Class;
+            let types = c"{CGRect={CGPoint=dd}{CGSize=dd}}@:{CGRect={CGPoint=dd}{CGSize=dd}}@";
+            let imp: extern "C" fn(&Object, objc::runtime::Sel, NSRect, *mut Object) -> NSRect = keep;
+            // Adds the method once; later calls fail harmlessly because it exists.
+            objc::runtime::class_addMethod(class, sel!(constrainFrameRect:toScreen:), std::mem::transmute(imp), types.as_ptr());
+        }
     }
 
     /// `display_height` is the height of the main display in points; AppKit counts y up
@@ -88,6 +181,15 @@ mod imp {
     use windows_sys::Win32::Foundation::{HWND, POINT};
     use windows_sys::Win32::UI::Input::KeyboardAndMouse::{GetAsyncKeyState, VK_LBUTTON};
     use windows_sys::Win32::UI::WindowsAndMessaging::*;
+
+    /// Not written for this OS yet: the overlay stays on the display it opened on.
+    pub fn cursor_global() -> Option<(f64, f64)> {
+        None
+    }
+
+    pub fn display_at(_x: f64, _y: f64) -> Option<Display> {
+        None
+    }
 
     pub fn hide_from_dock() {}
 
@@ -139,6 +241,15 @@ mod imp {
         AtomEnum, ClientMessageEvent, ConnectionExt, EventMask, PropMode,
     };
     use x11rb::wrapper::ConnectionExt as _;
+
+    /// Not written for this OS yet: the overlay stays on the display it opened on.
+    pub fn cursor_global() -> Option<(f64, f64)> {
+        None
+    }
+
+    pub fn display_at(_x: f64, _y: f64) -> Option<Display> {
+        None
+    }
 
     pub fn hide_from_dock() {}
 
@@ -213,6 +324,15 @@ mod imp {
 #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
 mod imp {
     use super::*;
+
+    /// Not written for this OS yet: the overlay stays on the display it opened on.
+    pub fn cursor_global() -> Option<(f64, f64)> {
+        None
+    }
+
+    pub fn display_at(_x: f64, _y: f64) -> Option<Display> {
+        None
+    }
 
     pub fn hide_from_dock() {}
 

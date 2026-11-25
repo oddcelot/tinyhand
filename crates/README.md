@@ -15,16 +15,22 @@ Packaging is in `packaging/`, the Linux test rigs in `tests/linux/`.
 ```sh
 scripts/fetch-gpui.sh                           # once: Zed's GPUI at the pinned commit, into vendor/zed
 cargo test -p tinyhand-core                     # logic tests
-cargo run --release -p tinyhand                 # Butterfly 3D
-cargo run --release -p tinyhand -- lavender     # any hand_<name>.png in assets/
+cargo run --release -p tinyhand                 # tray icon; click it or ⌃⌥H to turn the pointer on
+cargo run --release -p tinyhand -- style lavender   # commands go to the running copy
 ```
 
-Quit with Ctrl+C (on Linux also right-click or Esc). Needs Rust 1.100 (`rust-toolchain.toml` asks rustup for it).
+The app starts as a tray icon with the pointer off. Esc, the tray or the toggle shortcut
+turn it off; on Linux right-click does too. Quit from the tray menu. Commands
+(`tinyhand on|off|toggle|clear|style <id>|sound on|off|toggle`, or a `tinyhand://` URL)
+are sent to the running copy over a localhost socket. Needs Rust 1.100
+(`rust-toolchain.toml` asks rustup for it).
 
-For unattended runs: `TH_FAKE_MOUSE=x,y` pins the pointer, `TH_TAP_EVERY=seconds` taps on
-a timer, `TH_SECONDS=n` quits after n seconds, `TH_DEBUG=1` logs every frame.
-`TH_INPUT=capture` uses the Linux way of reading the mouse on macOS or Windows (careful:
-the overlay then swallows every click until it quits).
+For unattended runs: `TH_ACTIVATE=1` turns the pointer on at launch, `TH_FAKE_MOUSE=x,y`
+pins the pointer (and never starts the input tap), `TH_TAP_EVERY=seconds` taps on a timer,
+`TH_SECONDS=n` quits after n seconds, `TH_DEBUG=1` logs every frame, `TH_CONFIG_DIR=dir`
+keeps settings and `state.json` away from the real ones. `TH_INPUT=capture` uses the Linux
+way of reading the mouse on macOS or Windows (careful: the overlay then swallows every
+click until it is turned off).
 
 ## Ubuntu package
 

@@ -35,9 +35,15 @@ fn every_hand_measures() {
 
 #[test]
 fn fingertip_lands_on_cursor() {
+    for size in [0.08, 0.13, 0.20] {
+        fingertip_lands_on_cursor_at(size);
+    }
+}
+
+fn fingertip_lands_on_cursor_at(size: f32) {
     let mut hand = Hand::load(&assets().join("hand_butterfly3d.png")).unwrap();
-    hand.fit(Arm::hand_pixels(900.0, 2.0));
-    let mut arm = Arm::default();
+    hand.fit(Arm::hand_pixels(900.0, 2.0, size));
+    let mut arm = Arm::with_size(size);
     for &(x, y) in &[(700.0, 450.0), (100.0, 80.0), (1300.0, 850.0), (720.0, 20.0)] {
         // Let the grip settle.
         let mut pose = arm.aim(&hand, (x, y), (1440.0, 900.0), 1.0 / 120.0);
@@ -45,6 +51,18 @@ fn fingertip_lands_on_cursor() {
             pose = arm.aim(&hand, (x, y), (1440.0, 900.0), 1.0 / 120.0);
         }
         let (tx, ty) = Arm::fingertip(&hand, &pose);
-        assert!((tx - x).abs() < 1.5 && (ty - y).abs() < 1.5, "cursor {x},{y} tip {tx},{ty}");
+        assert!((tx - x).abs() < 1.5 && (ty - y).abs() < 1.5, "size {size} cursor {x},{y} tip {tx},{ty}");
+        assert!((pose.hand_size.1 - size * 900.0).abs() < 0.5, "size {size}: hand {}", pose.hand_size.1);
+        assert!(!arm.is_settling());
     }
+}
+
+#[test]
+fn hand_pixels_follow_size() {
+    assert_eq!(Arm::hand_pixels(900.0, 2.0, 0.13), 234);
+    assert_eq!(Arm::hand_pixels(1000.0, 1.0, 0.2), 200);
+    let mut arm = Arm::default();
+    assert_eq!(arm.size, 0.13);
+    arm.press_now();
+    assert!(arm.is_settling());
 }
