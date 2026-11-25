@@ -1,5 +1,5 @@
-//! The overlay window: what is on screen while the pointer is on (ArmView.swift, Ink.swift,
-//! TapEffect.swift and the tick of OverlayController.swift).
+//! The overlay window: what is on screen while the pointer is on (ArmView.swift, Ink.swift
+//! and the tick of OverlayController.swift).
 //!
 //! The window's root view, [`OverlayView`], holds no state of its own; each frame asks the
 //! [`Controller`] for the mouse, advances the [`Scene`] and paints it. Frames are asked
@@ -19,7 +19,6 @@ use image::RgbaImage;
 use tinyhand_core::custom_hands::CustomHands;
 use tinyhand_core::hand::Rotated;
 use tinyhand_core::ink::{self, Ink};
-use tinyhand_core::particles::{Particles, TapEffect};
 use tinyhand_core::styles::{self, Style, StyleKind};
 use tinyhand_core::{Arm, Hand};
 use tinyhand_platform as native;
@@ -100,7 +99,6 @@ pub struct Scene {
     sprite: Option<Sprite>,
     pub arm: Arm,
     pub ink: Ink,
-    pub particles: Particles,
     pub width: f32,
     pub height: f32,
     pub scale: f32,
@@ -128,7 +126,6 @@ impl Scene {
             sprite: None,
             arm: Arm::default(),
             ink: Ink::new(3.0),
-            particles: Particles::default(),
             width: 1440.0,
             height: 900.0,
             scale: 1.0,
@@ -177,13 +174,11 @@ impl Scene {
         self.still_since = Instant::now();
     }
 
-    pub fn press(&mut self, at: (f32, f32), effect: TapEffect, size: f32) {
+    pub fn press(&mut self, at: (f32, f32)) {
         self.arm.press_now();
         self.held = true;
         self.down_point = Some(at);
         self.button_seen_down = false;
-        let unit = self.height / 900.0 * size / 0.13;
-        self.particles.burst(effect, at.0, at.1, unit);
         self.wake();
     }
 
@@ -219,10 +214,9 @@ impl Scene {
             || self.arm.is_settling()
             || self.ink.is_drawing()
             || fading
-            || !self.particles.is_empty()
     }
 
-    fn draws(&mut self, cursor: (f32, f32), dt: f32, show_shadow: bool, subtle: bool, pointer_hidden: bool, window: &mut Window) -> Vec<Draw> {
+    fn draws(&mut self, cursor: (f32, f32), dt: f32, show_shadow: bool, pointer_hidden: bool, window: &mut Window) -> Vec<Draw> {
         let now = self.now();
         let mut draws: Vec<Draw> = self
             .ink
@@ -285,7 +279,6 @@ impl Scene {
                 draws.push(Draw::Image(bounds, image));
             }
         }
-        draws.extend(self.particles.live.iter().map(|p| Draw::Particle(*p, subtle)));
         draws
     }
 }
@@ -395,14 +388,12 @@ impl Controller {
         if !self.scene.held {
             self.scene.arm.ease_press(dt);
         }
-        self.scene.particles.step(dt);
         let t = self.scene.now();
         self.scene.ink.prune(t);
 
         let show_shadow = self.settings.show_shadow;
-        let subtle = self.settings.tap_effect == TapEffect::FairyDustSubtle;
         let hidden = self.normal_cursor;
-        let draws = self.scene.draws(mouse, dt, show_shadow, subtle, hidden, window);
+        let draws = self.scene.draws(mouse, dt, show_shadow, hidden, window);
         let busy = self.scene.busy() || self.cursor_settling();
         (draws, busy)
     }

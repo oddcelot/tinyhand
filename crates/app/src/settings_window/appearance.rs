@@ -1,12 +1,11 @@
-//! Appearance: pointer size, shadow and tap effect.
+//! Appearance: pointer size and shadow.
 
 use gpui::{AnyElement, Context, IntoElement, ParentElement, Styled, div, px};
-use tinyhand_core::particles::TapEffect;
-use tinyhand_core::settings::{POINTER_SIZE_RANGE, tap_effect_title};
+use tinyhand_core::settings::POINTER_SIZE_RANGE;
 
 use super::SettingsWindow;
 use super::icons;
-use super::ui::{MenuChoice, Theme, card, popup, row, slider, switch};
+use super::ui::{Theme, card, row, slider, switch};
 
 pub fn render(this: &mut SettingsWindow, t: &Theme, cx: &mut Context<SettingsWindow>) -> AnyElement {
     let s = this.settings(cx).clone();
@@ -18,10 +17,6 @@ pub fn render(this: &mut SettingsWindow, t: &Theme, cx: &mut Context<SettingsWin
         .child(icons::icon(icons::HAND, 11., t.secondary()))
         .child(slider(t, this, 180., (s.pointer_size - lo) / (hi - lo), cx))
         .child(icons::icon(icons::HAND, 17., t.secondary()));
-    let effects = [TapEffect::Off, TapEffect::FairyDust, TapEffect::FairyDustSubtle]
-        .into_iter()
-        .map(|e| MenuChoice::new(tap_effect_title(e), s.tap_effect == e, move |this, _, cx| this.change(cx, |s| s.tap_effect = e)))
-        .collect();
     card(
         t,
         Some("Pointer"),
@@ -33,7 +28,6 @@ pub fn render(this: &mut SettingsWindow, t: &Theme, cx: &mut Context<SettingsWin
                 None,
                 switch(t, "shadow", s.show_shadow, true, cx, |this, on, _, cx| this.change(cx, |s| s.show_shadow = on)),
             ),
-            row(t, "Tap effect", Some("Plays where the pointer taps.".into()), popup(t, this, "tap-effect", effects, cx)),
         ],
     )
     .into_any_element()

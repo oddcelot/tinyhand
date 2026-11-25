@@ -36,7 +36,7 @@ macOS 13 or later (Apple Silicon and Intel). Previews for Ubuntu 24.04 and Windo
 | **Esc** | Clear everything and turn the pointer off |
 
 While the pointer is on, a small toolbar at the bottom of the screen lets you pick one of
-39 hands or a laser dot, mute the tap sound, or exit.
+36 hands or a laser dot, mute the tap sound, or exit.
 
 ## Automation
 

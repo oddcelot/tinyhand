@@ -32,14 +32,14 @@ many hand/sound/tray images were missing.
   entry and the 512 px icon. `Depends: libasound2t64, libc6 (>= 2.39), libvulkan1,
   libwayland-client0, libxcb1, libxkbcommon-x11-0, libxkbcommon0`; `Recommends:
   mesa-vulkan-drivers`. Installs cleanly on bare ubuntu:24.04.
-- sway (layer shell): ~57 frames, a frame with the button down, butterfly, stick, fairy
-  dust and the toolbar over a `foot` window (`sway-1/2/3.png`); tray started; no
+- sway (layer shell): ~57 frames, a frame with the button down, the hand, stick and
+  the toolbar over a `foot` window (`sway-1/2/3.png`); tray started; no
   missing assets.
-- X11 (Xvfb + xcompmgr): ~100 frames, hand and dust over an xterm (`x11-*.png`); tray
+- X11 (Xvfb + xcompmgr): ~100 frames, hand over an xterm (`x11-*.png`); tray
   started; `tinyhand sound toggle` from a second process flipped `soundOn` true → false.
   The toolbar does not show on X11 (only on layer shell).
 - GNOME compositor (mutter 46 headless): `this Wayland compositor has no layer shell;
-  using XWayland instead`, ~146 frames, hand and dust in `gnome-appwin.png` (root-window
+  using XWayland instead`, ~146 frames, hand in `gnome-appwin.png` (root-window
   capture of mutter's XWayland fails, so that is the app window alone and its transparent
   area shows black); quits by itself at `TH_SECONDS`.
 - No sound card in the container, so "no audio output" is expected. Software rendering

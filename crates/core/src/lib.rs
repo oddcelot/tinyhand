@@ -7,8 +7,6 @@ pub mod custom_hands;
 pub mod hand;
 pub mod hand_maker;
 pub mod ink;
-pub mod particles;
-pub mod random;
 pub mod settings;
 pub mod styles;
 

@@ -23,8 +23,8 @@ maintainer = "TinyHand contributors"
 copyright = "2026 Kamran Ahmed and TinyHand contributors"
 license-file = ["../../LICENSE", "0"]
 extended-description = """\
-TinyHand for Linux, built with GPUI. The hand follows the mouse and throws fairy dust \
-when you click. Needs a Wayland compositor with layer shell (KDE, Hyprland, Sway) or \
+TinyHand for Linux, built with GPUI. The hand on a stick follows the mouse, taps \
+and draws. Needs a Wayland compositor with layer shell (KDE, Hyprland, Sway) or \
 X11; on GNOME it runs through XWayland."""
 section = "utils"
 priority = "optional"

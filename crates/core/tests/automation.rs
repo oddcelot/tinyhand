@@ -73,7 +73,7 @@ fn state_file_round_trip() {
     let custom = vec![CustomHand { id: "custom-00000001".into(), name: "Mine".into(), ink: 5 }];
     let state = State::new(true, "lavender", false, &custom);
     assert_eq!(state.pid, std::process::id());
-    assert_eq!(state.styles.len(), 41);
+    assert_eq!(state.styles.len(), 38);
     write_state(&path, &state).unwrap();
 
     let text = std::fs::read_to_string(&path).unwrap();
@@ -90,8 +90,8 @@ fn state_file_round_trip() {
     assert_eq!(v["soundOn"], false);
     assert_eq!(v["style"], "lavender");
     assert_eq!(v["styles"][0], serde_json::json!({"id": "lavender", "name": "Lavender toy", "type": "hand"}));
-    assert_eq!(v["styles"][39], serde_json::json!({"id": "custom-00000001", "name": "Mine", "type": "custom"}));
-    assert_eq!(v["styles"][40], serde_json::json!({"id": "laser", "name": "Laser dot", "type": "laser"}));
+    assert_eq!(v["styles"][36], serde_json::json!({"id": "custom-00000001", "name": "Mine", "type": "custom"}));
+    assert_eq!(v["styles"][37], serde_json::json!({"id": "laser", "name": "Laser dot", "type": "laser"}));
     assert_eq!(serde_json::from_str::<State>(&text).unwrap(), state);
 
     remove_state(&path).unwrap();

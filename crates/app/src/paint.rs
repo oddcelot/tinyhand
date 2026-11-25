@@ -15,7 +15,6 @@ use gpui::{
 use gpui::{LineCap, LineJoin, PathStyle, StrokeOptions};
 
 use tinyhand_core::ink::{self, Segment};
-use tinyhand_core::particles::{HUES, Kind, Particle};
 
 pub enum Draw {
     /// A finished or growing ink stroke.
@@ -27,18 +26,11 @@ pub enum Draw {
     Image(Bounds<Pixels>, Arc<gpui::RenderImage>),
     /// The laser dot: centre, radius, glow radius.
     Laser { x: f32, y: f32, r: f32, glow: f32 },
-    /// A dust particle; `subtle` paints it white like "Fairy dust, subtle".
-    Particle(Particle, bool),
 }
 
 pub fn rgba(hex: u32, alpha: f32) -> Hsla {
     let (r, g, b) = ink::rgb(hex);
     Rgba { r, g, b, a: alpha }.into()
-}
-
-fn tone(index: usize, alpha: f32, lighten: f32) -> Hsla {
-    let (r, g, b) = HUES[index % HUES.len()];
-    Rgba { r: r + (1.0 - r) * lighten, g: g + (1.0 - g) * lighten, b: b + (1.0 - b) * lighten, a: alpha }.into()
 }
 
 fn white(alpha: f32) -> Hsla {
@@ -58,23 +50,6 @@ fn polygon(points: &[Point<Pixels>]) -> Option<gpui::Path> {
     b.move_to(points[0]);
     for p in &points[1..] {
         b.line_to(*p);
-    }
-    b.close();
-    b.build().ok()
-}
-
-fn star(cx: f32, cy: f32, radius: f32, angle: f32, pinch: f32) -> Option<gpui::Path> {
-    let tip = |i: usize| {
-        let a = angle + i as f32 * std::f32::consts::FRAC_PI_2;
-        (cx + radius * a.cos(), cy + radius * a.sin())
-    };
-    let mut b = PathBuilder::fill();
-    b.move_to(pt(tip(3)));
-    for i in 0..4 {
-        let (from, to) = (tip((i + 3) % 4), tip(i));
-        let mid = ((from.0 + to.0) / 2.0, (from.1 + to.1) / 2.0);
-        let ctrl = (cx + (mid.0 - cx) * pinch, cy + (mid.1 - cy) * pinch);
-        b.curve_to(pt(to), pt(ctrl));
     }
     b.close();
     b.build().ok()
@@ -126,60 +101,6 @@ fn stroke_path(path: &[Segment], barbs: &Option<[ink::Point; 4]>, width: f32, of
         b.line_to(o(*d));
     }
     b.build().ok()
-}
-
-fn paint_particle(p: &Particle, subtle: bool, window: &mut Window) {
-    let o = p.opacity();
-    let (x, y, d) = (p.x, p.y, p.size);
-    if subtle {
-        // TapEffect.swift colours the subtle dust white at 0.7.
-        let a = 0.7 * o;
-        match p.kind {
-            Kind::Star => {
-                if let Some(path) = star(x, y, d / 2.0, p.angle, 0.16) {
-                    window.paint_path(path, white(a));
-                }
-            }
-            _ => disc(window, x, y, d / 2.0, white(a * 0.8)),
-        }
-        return;
-    }
-    match p.kind {
-        Kind::Ring => {
-            window.paint_quad(quad(
-                circle(x, y, d), Corners::all(px(d / 2.0)), white(0.0),
-                Edges::all(px(2.0)), tone(1, 0.6 * o, 0.4), BorderStyle::Solid,
-            ));
-        }
-        Kind::Star => {
-            let r = d / 2.0;
-            let body = linear_gradient(
-                p.angle.to_degrees().rem_euclid(360.0),
-                linear_color_stop(tone(p.hue, 0.85 * o, 0.0), 0.0),
-                linear_color_stop(tone(p.hue + 2, 0.55 * o, 0.25), 1.0),
-            );
-            if let Some(path) = star(x, y, r, p.angle, 0.16) {
-                window.paint_path(path, body);
-            }
-            if let Some(path) = star(x - r * 0.08, y - r * 0.1, r * 0.3, p.angle, 0.1) {
-                window.paint_path(path, white(0.95 * o));
-            }
-        }
-        Kind::Bead | Kind::Bubble => {
-            let body = linear_gradient(
-                135.0,
-                linear_color_stop(tone(p.hue, 0.18 * o, 0.5), 0.0),
-                linear_color_stop(tone(p.hue + 1, 0.75 * o, 0.0), 1.0),
-            );
-            let rim = if p.kind == Kind::Bubble { 1.2 } else { 0.8 };
-            window.paint_quad(quad(
-                circle(x, y, d), Corners::all(px(d / 2.0)), body,
-                Edges::all(px(rim)), tone(p.hue + 1, 0.85 * o, 0.3), BorderStyle::Solid,
-            ));
-            let g = d * 0.32;
-            disc(window, x - d * 0.2, y - d * 0.2, g / 2.0, white(0.9 * o));
-        }
-    }
 }
 
 pub fn paint(draws: Vec<Draw>, window: &mut Window) {
@@ -234,7 +155,6 @@ pub fn paint(draws: Vec<Draw>, window: &mut Window) {
                 let core: Hsla = Rgba { r: 1.0, g: 0.86, b: 0.82, a: 0.95 }.into();
                 disc(window, x, y, r * 0.45, core);
             }
-            Draw::Particle(p, subtle) => paint_particle(&p, subtle, window),
         }
     }
 }

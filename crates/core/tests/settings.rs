@@ -1,7 +1,6 @@
 //! Settings: Swift defaults, JSON keys, shortcuts, file handling and the macOS import.
 
 use std::path::PathBuf;
-use tinyhand_core::particles::TapEffect;
 use tinyhand_core::settings::*;
 
 fn temp(name: &str) -> PathBuf {
@@ -21,14 +20,13 @@ fn defaults_match_swift() {
     assert!(s.hand_sound);
     assert!(!s.laser_sound);
     assert_eq!(s.tap_sound, TapSound::Thock);
-    assert_eq!(s.tap_effect, TapEffect::FairyDust);
     assert!(!s.interact_keeps_hand);
     assert!(s.double_shift_click_through);
     assert_eq!(s.interact_key, InteractKey::Option);
     assert_eq!(s.ink_choice, InkChoice::Match);
     assert!(s.show_toolbar && s.show_ink_button);
-    assert_eq!(s.pinned_styles, ["butterfly3d", "lavender", "glove", "coral", "plush", "robot", "laser"]);
-    assert_eq!(s.pointer_style, "butterfly3d");
+    assert_eq!(s.pinned_styles, ["lavender", "glove", "coral", "plush", "robot", "laser"]);
+    assert_eq!(s.pointer_style, "lavender");
     assert!(!s.welcome_shown && !s.first_run_hint_shown && !s.login_item_set_up);
 }
 
@@ -38,14 +36,13 @@ fn json_uses_swift_key_names() {
     let o = v.as_object().unwrap();
     for k in [
         "shortcut.toggle", "shortcut.clear", "pointerSize", "showShadow", "fadeSeconds", "sound.hands",
-        "sound.laser", "tapSound", "tapEffect", "interactKeepsHand", "doubleShiftClickThrough",
+        "sound.laser", "tapSound", "interactKeepsHand", "doubleShiftClickThrough",
         "interactKey", "inkChoice", "showToolbar", "showInkButton", "pinnedStyles", "pointerStyle",
         "welcomeShown", "firstRunHintShown", "loginItemSetUp",
     ] {
         assert!(o.contains_key(k), "missing {k}");
     }
     assert_eq!(o["shortcut.toggle"], "ctrl+alt+h");
-    assert_eq!(o["tapEffect"], "fairyDust");
     assert_eq!(o["tapSound"], "thock");
     assert_eq!(o["interactKey"], "option");
     assert_eq!(o["inkChoice"], "match");
@@ -56,7 +53,6 @@ fn json_round_trip() {
     let mut s = Settings::default();
     s.toggle_shortcut = "shift+cmd+space".parse().unwrap();
     s.pointer_size = 0.2;
-    s.tap_effect = TapEffect::FairyDustSubtle;
     s.tap_sound = TapSound::Quack;
     s.ink_choice = InkChoice::Orange;
     s.interact_key = InteractKey::Off;
@@ -78,13 +74,12 @@ fn missing_and_unknown_keys_are_fine() {
 #[test]
 fn a_bad_value_only_loses_its_own_key() {
     let s = Settings::from_json(
-        r#"{"pointerSize": "big", "tapSound": "nope", "shortcut.toggle": "ctrl+alt+bogus", "showShadow": false, "tapEffect": "off"}"#,
+        r#"{"pointerSize": "big", "tapSound": "nope", "shortcut.toggle": "ctrl+alt+bogus", "showShadow": false}"#,
     );
     assert_eq!(s.pointer_size, 0.13);
     assert_eq!(s.tap_sound, TapSound::Thock);
     assert_eq!(s.toggle_shortcut, Shortcut::toggle_default());
     assert!(!s.show_shadow);
-    assert_eq!(s.tap_effect, TapEffect::Off);
 }
 
 #[test]
@@ -139,7 +134,7 @@ fn legacy_pointer_styles_migrate() {
     assert_eq!(Settings::from_json(r#"{"pointerStyle":"sunny"}"#).pointer_style, "coral");
     assert_eq!(Settings::from_json(r#"{"pointerStyle":"pink"}"#).pointer_style, "pink");
     let s = Settings::from_json(r#"{"pointerStyle":"gone"}"#);
-    assert_eq!(s.style_existing(&[]), "butterfly3d");
+    assert_eq!(s.style_existing(&[]), "lavender");
 }
 
 #[test]
@@ -150,7 +145,6 @@ fn reset_all_keeps_the_three_flags() {
     s.toggle_shortcut = "cmd+k".parse().unwrap();
     s.pinned_styles = vec!["pink".into()];
     s.pointer_style = "pink".into();
-    s.tap_effect = TapEffect::Off;
     s.welcome_shown = true;
     s.first_run_hint_shown = true;
     s.login_item_set_up = true;
@@ -226,7 +220,6 @@ fn enum_values_match_swift_raw_values() {
         assert_eq!(j(&t), format!("\"{}\"", t.id()));
     }
     assert_eq!(TapSound::Wood.title(), "Wood block");
-    assert_eq!(tap_effect_title(TapEffect::FairyDustSubtle), "Fairy dust, subtle");
     assert_eq!(InteractKey::Option.symbol(), "⌥");
 }
 
@@ -299,8 +292,6 @@ const SAMPLE_PLIST: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
 	<false/>
 	<key>sound.hands</key>
 	<false/>
-	<key>tapEffect</key>
-	<string>fairyDustSubtle</string>
 	<key>tapSound</key>
 	<string>pop</string>
 	<key>welcomeShown</key>
@@ -321,7 +312,6 @@ fn imports_macos_defaults() {
     assert_eq!(s.pointer_style, "laser");
     assert!(!s.show_shadow);
     assert!(!s.hand_sound);
-    assert_eq!(s.tap_effect, TapEffect::FairyDustSubtle);
     assert_eq!(s.tap_sound, TapSound::Pop);
     assert!(s.welcome_shown);
     // Not in the sample: defaults.

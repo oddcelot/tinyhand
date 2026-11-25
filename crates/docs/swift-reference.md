@@ -82,7 +82,6 @@ comments refer to these files. Numbers and key names are copied exactly.
 | `sound.hands` | Bool | `true` |
 | `sound.laser` | Bool | `false` |
 | `tapSound` | String (TapSoundChoice) | `thock` |
-| `tapEffect` | String | `fairyDust` |
 | `interactKeepsHand` | Bool | `false` |
 | `doubleShiftClickThrough` | Bool | `true` |
 | `interactKey` | String `option\|command\|control\|off` | `option` |
@@ -90,7 +89,7 @@ comments refer to these files. Numbers and key names are copied exactly.
 | `showToolbar` | Bool | `true` |
 | `showInkButton` | Bool | `true` |
 | `pinnedStyles` | [String] | `PointerStyle.defaultPinned`. Duplicates are removed; if the result is empty, it falls back to the default. `maxPinned = 8`. |
-| `pointerStyle` | String | `butterfly3d`. Legacy values are migrated: `"dot"`→laser, `"sunny"`→coral. |
+| `pointerStyle` | String | `lavender`. Legacy values are migrated: `"dot"`→laser, `"sunny"`→coral. |
 | `welcomeShown` | Bool | — |
 | `firstRunHintShown` | Bool | — |
 | `loginItemSetUp` | Bool | — |
@@ -107,7 +106,7 @@ comments refer to these files. Numbers and key names are copied exactly.
   - White `0xFFFFFF`
   - Black `0x1D1D21`
 - **`launchAtLogin`** is not stored in UserDefaults. It reads and writes `SMAppService.mainApp` (register/unregister).
-- **`resetAll()`** removes exactly these keys: `shortcut.toggle`, `shortcut.clear`, `pointerSize`, `showShadow`, `fadeSeconds`, `sound.hands`, `sound.laser`, `interactKey`, `interactKeepsHand`, `doubleShiftClickThrough`, `pinnedStyles`, `pointerStyle`, `inkChoice`, `showInkButton`, `showToolbar`, `tapSound`, `tapEffect`.
+- **`resetAll()`** removes exactly these keys: `shortcut.toggle`, `shortcut.clear`, `pointerSize`, `showShadow`, `fadeSeconds`, `sound.hands`, `sound.laser`, `interactKey`, `interactKeepsHand`, `doubleShiftClickThrough`, `pinnedStyles`, `pointerStyle`, `inkChoice`, `showInkButton`, `showToolbar`, `tapSound`.
 - **Every setter** posts `TinyHandPreferencesChanged`, which acts as a global change bus.
 
 ---
@@ -189,7 +188,7 @@ comments refer to these files. Numbers and key names are copied exactly.
   - `Double-tap ⇧` *to click through*, only if that setting is on
   - `Esc` *to exit*
 
-**Deactivate** stops the timer and monitors, disables the tap, clears ink and effects, hides the overlay and toolbar, unregisters Esc and shows the cursor.
+**Deactivate** stops the timer and monitors, disables the tap, clears ink, hides the overlay and toolbar, unregisters Esc and shows the cursor.
 
 **Esc** is registered only while active and only when no popup menu is open, our own menu is closed, and click-through is off. Esc calls `exit()`, which clears ink and deactivates.
 
@@ -212,7 +211,7 @@ On `activeSpaceDidChange`, if the overlay is not on the current space, it re-ord
 **Mouse down (swallowed):**
 1. `press()`, held=true.
 2. Play the tap sound and hide the hint.
-3. Record the down point and play the tap effect there.
+3. Record the down point.
 
 **Drag:**
 - A stroke begins only after **4 pt** of movement from the down point.
@@ -222,7 +221,7 @@ On `activeSpaceDidChange`, if the overlay is not on the current space, it re-ord
 
 **Tick** (120 Hz busy, 20 Hz idle):
 - **Idle switch.** After `0.5` s with the mouse still, not held, not settling and not drawing, the timer drops to 20 Hz. It installs global and local monitors for move, drag, down and flagsChanged; any of these calls `wake()`.
-- **Screen change.** If the mouse moves to another screen: release, clear ink and effects, move the overlay, re-place the toolbar, reveal it for 1.5 s.
+- **Screen change.** If the mouse moves to another screen: release, clear ink, move the overlay, re-place the toolbar, reveal it for 1.5 s.
 - **Toolbar reveal zone:** `f.insetBy(dx:-80,dy:0).union(f.offsetBy(dx:0,dy:90)).insetBy(dx:0,dy:-10)`.
   - The toolbar is revealed if permission is needed, **or** if `showToolbar && !drawing && (near || within revealUntil)`.
 - **Menu detection.** Popup menus are found with `CGWindowListCopyWindowInfo`, keeping windows whose layer equals `CGWindowLevelForKey(.popUpMenuWindow)`.
@@ -252,7 +251,7 @@ On `activeSpaceDidChange`, if the overlay is not on the current space, it re-ord
 - `liftFrac 0.06`
 - `inkWidth = max(3, bounds.height*0.0055)`
 
-**Layer order:** ink, then hand group (rod + hand), then laser dot, then effects.
+**Layer order:** ink, then hand group (rod + hand), then laser dot.
 
 **Grip point:**
 - `targetX = clamp(cursor.x + 0.30*W, 0.15*W, 1.05*W)`
@@ -287,7 +286,6 @@ On `activeSpaceDidChange`, if the overlay is not on the current space, it re-ord
 
 **Image detail:** the hand image is resampled to a height rounded up to a multiple of 64 px for the current backing scale. It uses the full image if the result is at least 90% of the original height.
 
-**Tap-effect unit:** `H/900 * size/0.13`.
 
 **Fallback:** if a style's asset fails to load, the style becomes `.laser`.
 
@@ -357,21 +355,16 @@ On `activeSpaceDidChange`, if the overlay is not on the current space, it re-ord
 | neon | Neon | E0309A |
 | leaf | Leaf | 3E9E2E |
 | cookie | Gingerbread | 9A5E2C |
-| pentacode | Pentacode | 0CA8D1 |
-| butterfly | Butterfly | 1991C7 |
-| butterfly3d | Butterfly 3D | 1991C7 |
 
 - After the built-ins come the custom hands, then `laser` ("Laser dot", red).
-- `defaultPinned = [butterfly3d, lavender, glove, coral, plush, robot, laser]`.
+- `defaultPinned = [lavender, glove, coral, plush, robot, laser]`.
 - Asset name is `hand_<id>` for built-ins and the raw id for custom hands.
 
 **HandAsset.measure** (rows of alpha > 128 in the PNG):
 - `top` = the first non-empty row.
 - `maxW` = the widest row within `top..top+0.45h`.
 - `fist` = the first row wider than `0.6*maxW`.
-- `narrowing` = the first row from `fist` narrower than `0.35*maxW`.
-- `stickW` = the median width of the rows from `narrowing` to the last row.
-- `wrist` = the first row from `narrowing` with width ≤ `1.25*stickW`.
+- `wrist` = the first row from `fist` narrower than `0.35*maxW`.
 - `rodW` = the width at `wrist+h/50`.
 - `rodEnd` = the first row from `wrist+h/33` wider than `1.8*rodW` (the handle), otherwise the last row.
 - `handTop = (top−0.004h)/h`.
@@ -389,34 +382,6 @@ On `activeSpaceDidChange`, if the overlay is not on the current space, it re-ord
 3. `exeDir/<name>.png`
 4. `exeDir/assets/<name>.png`
 5. `./assets/<name>.png`
-
----
-
-## TapEffect.swift
-**Choices:** `off` "Off", `fairyDust` "Fairy dust", `fairyDustSubtle` "Fairy dust, subtle". The emitter is a `CAEmitterLayer` with a circle shape.
-
-**Timing:**
-- Each burst emits for `0.12` s, then birth rate is set to 0.
-- The layer is removed after `0.12 + longest lifetime + 0.1` s.
-- Emitter radius is `4*unit`, or `3*unit` for subtle.
-
-**Hues** (sRGB): (0.96, 0.30, 0.68), (0.60, 0.38, 0.98), (0.16, 0.62, 1.00), (0.10, 0.84, 0.70), (1.00, 0.70, 0.16).
-
-**Particles** (every value below is multiplied by `unit`):
-- **Ring:** ripple sprite of 128 px. Birth rate `1/burst`, life 0.5, scale 0.15, scaleSpeed 2.4, alphaSpeed −2.0. Not used in subtle mode.
-- **For each hue:**
-  - **Star** (sprite 112 px, four points, pinch 0.16): birth `3/burst`, life 1.1±0.4, velocity 120±75, yAccel −120, scale 0.42±0.2, scaleSpeed −0.24, spin 4, alphaSpeed −0.6.
-  - **Dust bead** (sprite 56 px): birth `10/burst`, life 0.85±0.4, velocity 100±90, yAccel −130, scale 0.2±0.1, scaleSpeed −0.1, spin 3, alphaSpeed −0.8.
-  - **Bubble** (bead sprite): birth `4/burst`, life 1.4±0.6, velocity 46±44, yAccel −30, scale 0.42±0.22, scaleSpeed −0.12, spin 2, alphaSpeed −0.55.
-  - All three emit over the full circle (`emissionRange 2π`).
-- **Subtle mode multipliers:**
-  - birth ×0.3
-  - velocity, velocity range and yAccel ×0.55
-  - scale, scale range and scaleSpeed ×0.72
-  - life ×0.75
-  - `alphaSpeed = −0.7/(life+range)`
-  - colour white at alpha 0.7
-- **Sprites** are drawn procedurally: gradient glass stars and beads, plus an iridescent ring. The exact gradient stops are in `makeStar`, `makeBead` and `makeRipple` (lines 214–280).
 
 ---
 
@@ -575,7 +540,6 @@ Showing the card sets `welcomeShown = true`.
 **Appearance page:**
 - `Size` slider over 0.08–0.20, 180 wide.
 - `Shadow under the pointer`.
-- `Tap effect`, *Plays where the pointer taps.*, a picker.
 
 **Drawing page:**
 - `Ink colour`, 9 swatches of 20 pt. Detail is *Matches each pointer.* or *All pointers draw in <colour>.*

@@ -1,6 +1,5 @@
 //! Preferences from Preferences.swift, kept in `settings.json` with the same key names.
 
-use crate::particles::TapEffect;
 use crate::styles::{self, DEFAULT_PINNED, DEFAULT_STYLE, MAX_PINNED};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
@@ -363,46 +362,6 @@ impl TapSound {
     }
 }
 
-/// The settings value for a tap effect: `off`, `fairyDust` or `fairyDustSubtle`.
-pub fn tap_effect_id(e: TapEffect) -> &'static str {
-    match e {
-        TapEffect::Off => "off",
-        TapEffect::FairyDust => "fairyDust",
-        TapEffect::FairyDustSubtle => "fairyDustSubtle",
-    }
-}
-
-pub fn tap_effect_title(e: TapEffect) -> &'static str {
-    match e {
-        TapEffect::Off => "Off",
-        TapEffect::FairyDust => "Fairy dust",
-        TapEffect::FairyDustSubtle => "Fairy dust, subtle",
-    }
-}
-
-pub fn tap_effect_from_id(id: &str) -> Option<TapEffect> {
-    match id {
-        "off" => Some(TapEffect::Off),
-        "fairyDust" => Some(TapEffect::FairyDust),
-        "fairyDustSubtle" => Some(TapEffect::FairyDustSubtle),
-        _ => None,
-    }
-}
-
-/// serde adapter for `TapEffect`, which has no serde of its own.
-mod tap_effect_serde {
-    use super::*;
-
-    pub fn serialize<S: Serializer>(e: &TapEffect, s: S) -> Result<S::Ok, S::Error> {
-        s.serialize_str(tap_effect_id(*e))
-    }
-
-    pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<TapEffect, D::Error> {
-        let id = String::deserialize(d)?;
-        tap_effect_from_id(&id).ok_or_else(|| serde::de::Error::custom(format!("unknown tap effect '{id}'")))
-    }
-}
-
 // ----------------------------------------------------------------- settings
 
 /// Every preference. Missing keys take their Swift defaults; unknown keys are ignored.
@@ -425,8 +384,6 @@ pub struct Settings {
     pub laser_sound: bool,
     #[serde(rename = "tapSound")]
     pub tap_sound: TapSound,
-    #[serde(rename = "tapEffect", with = "tap_effect_serde")]
-    pub tap_effect: TapEffect,
     #[serde(rename = "interactKeepsHand")]
     pub interact_keeps_hand: bool,
     #[serde(rename = "doubleShiftClickThrough")]
@@ -463,7 +420,6 @@ impl Default for Settings {
             hand_sound: true,
             laser_sound: false,
             tap_sound: TapSound::Thock,
-            tap_effect: TapEffect::FairyDust,
             interact_keeps_hand: false,
             double_shift_click_through: true,
             interact_key: InteractKey::Option,
@@ -725,9 +681,6 @@ pub fn import_macos_defaults(plist_bytes: &[u8]) -> Settings {
     }
     if let Some(v) = pick(d, "tapSound") {
         s.tap_sound = v;
-    }
-    if let Some(v) = text("tapEffect").and_then(tap_effect_from_id) {
-        s.tap_effect = v;
     }
     if let Some(v) = flag("interactKeepsHand") {
         s.interact_keeps_hand = v;
