@@ -6,6 +6,13 @@
 //! low-level mouse hook on Windows, and isn't part of this spike. On Linux the overlay
 //! takes the mouse itself, which swallows the clicks for free.
 
+pub mod cursor;
+pub mod hotkeys;
+pub mod input;
+pub mod login;
+pub mod sound;
+pub mod tray;
+
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 
 /// Mouse position in the overlay's coordinates (points, y down, origin at the top left of
