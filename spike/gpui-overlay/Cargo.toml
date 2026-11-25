@@ -1,0 +1,19 @@
+[package]
+name = "tinyhand-overlay"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+gpui = { version = "0.2.2", features = ["runtime_shaders"] }
+image = { version = "0.25.10", default-features = false, features = ["png"] }
+raw-window-handle = "0.6.2"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc = "0.2"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_UI_Input_KeyboardAndMouse", "Win32_Graphics_Gdi"] }
+
+# The objc crate's macros check a cfg this crate doesn't declare.
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(feature, values("cargo-clippy"))'] }
